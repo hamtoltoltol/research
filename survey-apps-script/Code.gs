@@ -11,8 +11,8 @@
  *               편집자에게 공유하지 말고 숨김 처리해 두세요.
  */
 
-// 응답을 허용할 이메일 도메인. 비우면 로그인된 모든 계정을 허용합니다. 예: ['yonsei.ac.kr']
-const ALLOWED_DOMAINS = [];
+// 응답을 허용할 이메일 도메인. 비우면 로그인된 모든 계정을 허용합니다.
+const ALLOWED_DOMAINS = ['yonsei.ac.kr'];
 
 const RESULT_SHEET = '응답';
 const RAW_SHEET = '원본';
