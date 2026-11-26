@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<title>교내 연구진흥사업 만족도 설문조사</title>
+<style>
+/* Layout: 한 화면 한 단계. 진행바 아래 카드 하나가 현재 단계(도입 공통 → 사업별 13개 → 마무리 공통)를 보여준다. */
+:root {
+  --bg: #f4f7f8;
+  --surface: #ffffff;
+  --ink: #14232b;
+  --muted: #566a74;
+  --line: #d5dfe3;
+  --accent: #0b6b8a;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4f1f5;
+  --warn: #b3261e;
+  --warn-soft: #fbeae8;
+  --font: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1a20; --surface: #15252d; --ink: #e5eef1; --muted: #93a7b0; --line: #2a3e48;
+    --accent: #4fb9d9; --accent-ink: #06222c; --accent-soft: #163541;
+    --warn: #f0877f; --warn-soft: #3a2422;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1a20; --surface: #15252d; --ink: #e5eef1; --muted: #93a7b0; --line: #2a3e48;
+  --accent: #4fb9d9; --accent-ink: #06222c; --accent-soft: #163541;
+  --warn: #f0877f; --warn-soft: #3a2422;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.6; }
+.wrap {
+  max-width: 760px; margin: 0 auto; padding-block: 20px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.brand { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+.link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; }
+.prog { margin-bottom: 18px; }
+.prog-meta { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--muted); margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.prog-bar { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.prog-bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; transition: width .25s; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px 20px; }
+h1 { font-size: 26px; line-height: 1.3; margin: 0 0 12px; text-wrap: balance; }
+h2 { font-size: 21px; line-height: 1.35; margin: 0 0 6px; text-wrap: balance; }
+h3.sub { font-size: 15px; margin: 8px 0 14px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--accent); }
+p { margin: 0 0 12px; }
+.lead { color: var(--muted); }
+.eyebrow { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin-bottom: 6px; }
+.banner { border: 1px solid var(--line); background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; }
+.notice { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 14px; margin-bottom: 14px; }
+.notice p { margin: 0 0 4px; }
+.notice p:last-child { margin: 0; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 14px 0; font-size: 14px; }
+.facts dt { color: var(--muted); font-weight: 600; }
+.facts dd { margin: 0; min-width: 0; }
+.info { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 12px 0 22px; font-size: 14px; }
+.info-h { font-weight: 700; margin-bottom: 8px; }
+.sec { margin-bottom: 12px; }
+.sec-h { font-weight: 600; margin-bottom: 2px; }
+.ln { padding-left: .9em; text-indent: -.9em; overflow-wrap: anywhere; margin: 0 0 2px; }
+.ln.sub { margin-left: 1.2em; }
+.ln.warn { color: var(--warn); font-weight: 600; }
+.more { margin: 8px 0 0; }
+.more a, .avg a { color: var(--accent); font-weight: 600; }
+.tbl { overflow-x: auto; margin: 8px 0; }
+.tbl table { border-collapse: collapse; font-size: 13px; min-width: 280px; background: var(--surface); }
+.tbl th, .tbl td { border: 1px solid var(--line); padding: 5px 10px; text-align: center; vertical-align: middle; }
+.tbl th { background: var(--bg); }
+.tbl td.l { text-align: left; }
+.tbl .warn { color: var(--warn); font-weight: 600; }
+fieldset { border: 0; padding: 0; margin: 0 0 24px; min-width: 0; }
+legend { padding: 0; font-weight: 600; margin-bottom: 10px; }
+.qn { display: inline-block; min-width: 2.2em; color: var(--accent); font-variant-numeric: tabular-nums; }
+legend em { font-style: normal; font-weight: 400; color: var(--muted); font-size: 14px; }
+.qhint { font-size: 13px; color: var(--muted); margin: -4px 0 10px; }
+.opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; cursor: pointer; background: var(--surface); }
+.opt:hover { border-color: var(--accent); }
+.opt.on { border-color: var(--accent); background: var(--accent-soft); }
+.opt.dis { opacity: .45; cursor: not-allowed; }
+.opt input { margin-top: 5px; accent-color: var(--accent); flex: none; }
+.opt span { min-width: 0; overflow-wrap: anywhere; }
+.other, textarea { width: 100%; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.other { margin-top: 2px; }
+textarea { min-height: 110px; resize: vertical; }
+input:focus-visible, textarea:focus-visible, button:focus-visible, .opt:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.hint { font-size: 13px; color: var(--muted); flex: 1 1 100%; order: -1; min-height: 1.4em; }
+.btn { font: inherit; font-weight: 600; border-radius: 10px; padding: 11px 22px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.toc { overflow-x: auto; margin: 14px 0 6px; }
+.toc table { border-collapse: collapse; font-size: 14px; width: 100%; min-width: 300px; }
+.toc th, .toc td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; }
+.toc th { background: var(--bg); }
+.toc td:first-child { white-space: nowrap; width: 5em; color: var(--muted); }
+.signoff { color: var(--muted); margin-top: 14px; }
+/* results */
+.res h3 { font-size: 16px; margin: 26px 0 8px; }
+.res .q-title { font-weight: 600; margin: 14px 0 6px; font-size: 15px; }
+.stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 4px; }
+.stat { flex: 1 1 120px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 13px; color: var(--muted); }
+.bar { display: grid; grid-template-columns: minmax(0, 40%) 1fr 3.2em; gap: 10px; align-items: center; font-size: 14px; margin: 4px 0; font-variant-numeric: tabular-nums; }
+.bar .lbl { min-width: 0; overflow-wrap: anywhere; }
+.bar .track { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.bar .track i { display: block; height: 100%; background: var(--accent); }
+.bar .n { text-align: right; color: var(--muted); }
+.texts { margin: 6px 0 0; padding-left: 18px; font-size: 14px; color: var(--muted); }
+.texts li { overflow-wrap: anywhere; }
+.avg { font-size: 14px; color: var(--muted); margin: 0 0 4px; }
+@media (max-width: 440px) {
+  .card { padding: 18px 14px; }
+  h1 { font-size: 23px; }
+  .bar { grid-template-columns: minmax(0, 46%) 1fr 2.6em; }
+}
+@media (prefers-reduced-motion: reduce) { .prog-bar i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">교내 연구진흥사업 만족도 설문조사</div>
+  </div>
+  <div id="app"></div>
+</div>
+<script>
+/* ---------- 설문 내용 : 이 영역만 고치면 문항이 바뀐다 ---------- */
+const Q = (id, no, text, type, opts, o) => Object.assign({ id, no, text, type, opts: opts || [] }, o || {});
+
+const ALL_PROGRAMS = ['논문게재료 지원사업', '외국어논문교열 지원사업', '국제학술회의참가경비 지원사업', '국제학술회의참가경비 지원사업Ⅱ', '교외연구과제신청 지원사업(Seedmoney)', '학술행사개최 지원사업', '외국석학초청경비 지원사업', '전문학술저서출판 지원사업', '정책연구지원사업', '박사후연구원(POST-DOC 및 연구교수) 지원', '연구기구 지원사업', '융·복합연구회 지원사업'];
+
+const COMMON = [
+  Q('c0', '0', '교원 구분을 선택해주시기 바랍니다.', 'single', ['정년트랙', '비정년트랙']),
+  Q('c1', '1', '귀하의 소속 대학을 선택하여 주십시오.', 'single', ['글로벌창의융합대학', '과학기술대학', '보건과학대학', 'RC융합대학', '기타: (주관식 기입)'], { other: '기타: (주관식 기입)' }),
+  Q('c2', '2', '귀하의 소속 계열을 선택하여 주십시오.', 'single', ['인문계열', '사회계열', '이학계열', '공학계열']),
+  Q('c3', '3', '귀하의 직위를 선택하여 주십시오.', 'single', ['정교수', '부교수', '조교수']),
+  Q('c4', '4', '귀하가 우리 학교에 임용된 지 몇 년차인지 선택하여 주십시오.', 'single', ['3년 이하', '4~6년 차', '7~9년 차', '10년 이상']),
+  Q('c5', '5', '귀하께서는 다음의 교내 연구진흥사업에 대해 얼마나 알고 계십니까?', 'single', ['전혀 모름', '1~2개', '3~4개', '5~7개', '8가지 이상'], { hint: '대상 사업: ' + ALL_PROGRAMS.join(', ') }),
+  Q('c6', '6', '귀하가 교내 연구진흥사업에 대한 정보를 주로 취득하는 곳은 어디입니까? (복수응답 가능)', 'multi', ['미래연구처/미래산학협력단 홈페이지 (https://wresearch.yonsei.ac.kr)', '미래연구처 사무실 (이메일·전화 문의, 방문 등)', '학부(과) 사무실', '오프라인 간담회 및 설명회', '동료 교원', '기타: (주관식 기입)'], { other: '기타: (주관식 기입)' }),
+  Q('c7', '7', '교내 연구진흥사업 참여 활성화를 위한 홍보방법으로 가장 적당한 것은 무엇이라고 생각하십니까? (최대 2개까지 복수응답 가능)', 'multi', ['정기적인 안내 이메일 발송', '홈페이지 공지', '학부(과) 또는 대학 단위 안내', '오프라인 간담회 및 설명회 개최', '기타: (주관식 기입)'], { other: '기타: (주관식 기입)', max: 2 }),
+];
+
+const USE_Q = [
+  { text: '담당자의 업무처리에 만족하셨습니까?', type: 'single', opts: ['매우 만족', '만족', '보통', '불만족', '매우 불만족'] },
+  { text: '해당 사업이 실제로 연구활동에 도움이 되셨습니까?', type: 'single', opts: ['매우 도움이 되었음', '도움이 되었음', '보통', '도움이 되지 않았음', '전혀 도움이 되지 않았음'] },
+  { text: '해당 사업의 운영 및 지원내용 중 개선이 필요한 부분이 있습니까?', type: 'single', opts: ['개선이 필요한 사항 없음', '지원금액 및 지원한도', '지원대상 및 신청자격', '신청 및 행정절차', '담당자 안내 및 업무처리', '그 밖의 의견(주관식)'], other: '그 밖의 의견(주관식)', opt: true },
+];
+
+const HP = 'https://wresearch.yonsei.ac.kr/index.php?mp=';
+/* 줄 앞 기호: '!' 강조(빨강), '>' 들여쓰기 */
+const BIZ = [
+  { id: 'b1', no: '1', name: '논문게재료 지원사업', link: HP + '2_2_3', sections: [
+    { h: '1. 사업목적', lines: ['- 국내외 저명학술지에 학술연구논문을 투고시 지원하여 연구능력 증진을 도모하기 위함'] },
+    { h: '2. 지원대상', lines: ['- 해당 논문의 주저자(제1저자 또는 교신저자)이고, 신청일 현재 본교에 재직하고 있는 전임교원을 대상으로 한다.', '- 해당 논문의 주저자(제1저자)이고, 신청일 현재 본교에 재학하고 있는 대학원생 및 신진연구인력(단, 교신저자가 현재 본교에 재직하고 있는 전임교원 또는 과제책임자인 경우에 한함)도 대상으로 한다.', '- 논문에 타과제의 사사가 있을 경우, 해당 과제에서 처리함을 원칙으로 한다. 단, 해당 과제의 수행 기간이 종료된 경우(다년도 연구과제는 최종 종료된 경우)에 한하여 지원한다.'] },
+    { h: '3. 지원내용', lines: ['- 논문 1건당 100만원 한도로 게재료와 심사료를 지원(기본)', '- JCR 기준 분야별 요건 충족시 지원 한도'], table: { head: ['JCR 기준 분야별', '지원 한도'], rows: [['상위 5% 이상', '실비 전액 지원'], ['~ 10%', '!400만원 한도'], ['~ 25%', '200만원 한도'], ['~ 50%', '150만원 한도']] } },
+  ] },
+  { id: 'b2', no: '2', name: '외국어논문교열 지원사업', link: HP + '2_2_2', sections: [
+    { h: '1. 사업목적', lines: ['- 학술연구논문을 국외 저명학술지에 투고하는 경우, 해당 논문의 문체나 흐름 등을 교열하게 하여 투고예정논문에 대한 완성도 및 신뢰성을 높이고 국외 저명학술지의 등재율을 높이기 위함'] },
+    { h: '2. 지원대상', lines: ['- 해당 논문의 주저자(제1저자 또는 교신저자)이고, 신청일 현재 본교에 재직하고 있는 전임교원을 대상으로 한다. (단, 소속 단과대학, 연구소, 외부 학회에서 이와 동일한 사업에 의해 지원을 받는 경우 대상에서 제외)', '- 해당 논문의 주저자(제1저자)이고, 신청일 현재 본교에 재학하고 있는 대학원생 및 신진연구인력(단, 교신저자가 현재 본교에 재직하고 있는 전임교원 또는 과제책임자인 경우에 한함)도 대상으로 한다.', '- 지원학술지', '>1) 인문사회계열 - 학진등재(후보)지, SSCI, A&HCI 및 일반 국제학술지에 투고 예정 인 논문', '>2) 이·공·의학계열 : 학진등재 학술지(별도 안내 시까지 한시적 운영), SCIE에 등록된 학술지에 투고 예정인 논문'] },
+    { h: '3. 지원내용', lines: ['- 연구처 협력업체(Editage, Enago, Eworldediting) 및 그 외 개별 업체 이용분에 대하여 논문 1편당 100만원 한도 내 지원 (100만원 한도 내에서 프리미엄 서비스 이용 가능)'] },
+  ] },
+  { id: 'b31', no: '3-1', name: '국제학술회의참가경비 지원사업', link: HP + '2_2_4', sections: [
+    { h: '1. 사업목적', lines: ['- 국제학술회의 참가경비를 지원하여 국제 간 학술교류를 촉진하고 교원의 연구능력을 신장시켜 학술 발전을 진작함'] },
+    { h: '2. 지원대상', lines: ['- 연구논문을 구두 발표하기 위해 국제학술회의에 참가하는 본교 전임교원', '- 인문·사회계열(보건행정학과 포함) 소속 교원의 경우, 임용일이 신청일로부터 9년 이하인 전임교원', '- 이·공학계열 소속 교원의 경우, 임용일이 신청일로부터 5년 이하인 전임교원'] },
+    { h: '3. 지원내용', lines: ['- 아시아 권역: 100만원 한도', '- 아시아 외 권역: 200만원 한도'] },
+    { h: '4. 지원신청 및 제한사항', lines: ['- 지원 승인을 받은 교원은 반드시 출국 전 연구관리시스템을 통해 출장 신청을 해야 한다.', '- 별도로 교비 또는 기타 교외 연구과제에서 예산을 추가 지원받는 경우, 본 사업을 통해 동일한 항목으로 중복 지원 받을 수 없다.'] },
+  ] },
+  { id: 'b32', no: '3-2', name: '국제학술회의참가경비 지원사업Ⅱ', link: HP + '2_2_12', sections: [
+    { h: '1. 사업목적', lines: ['- ‘국제학술회의참가경비 지원사업’의 지원 대상에서 임용일 기준으로 인해 배제된 전임교원을 일정 요건 하에서 지원하기 위해 신설'] },
+    { h: '2. 지원대상', lines: ['- 연구논문을 구두 발표하기 위해 국제학술회의에 참가하는 본교 전임교원', '- 인문·사회계열(보건행정학과 포함) 소속 교원의 경우, 임용일이 신청일로부터 9년을 초과하는 전임교원', '- 이·공학계열 소속 교원의 경우, 임용일이 신청일로부터 5년을 초과하는 전임교원'] },
+    { h: '3. 지원내용', lines: ['- 아시아 권역: 100만원 한도', '- 아시아 외 권역: 200만원 한도'] },
+    { h: '4. 특이사항', lines: ['!기존의 ‘국제학술회의참가경비 지원사업’ 대비 하기 요건을 추가로 충족할 것을 요구함', '!※ 4단계 두뇌한국(BK)21사업에서 인정하는 국제학술대회에 참가하여 연구논문발표하는 자에 한함', '>- 4단계 두뇌한국(BK)21 사업 관리 운영 지침 내 국제(학술)대회 인정기준'],
+      table: { head: ['분야', '인정기준'], rows: [['인문사회 분야', '~4개국 이상이 참여하며 총 구두 발표 논문이 10건 이상, 구두 발표 논문 발표자 중 외국기관 소속 외국인이 50% 이상'], ['과학기술 분야', '~4개국 이상이 참여하며 총 구두 발표 논문이 20건 이상, 구두 발표 논문 발표자 중 외국기관 소속 외국인이 50% 이상']] },
+      after: ['>※ 상기 기준을 충족한 경우에도 영리목적의, 학문적 권위가 인정되기 어려운 부실학회·학술지가 개최하는 국제학술대회는 제외'] },
+  ] },
+  { id: 'b4', no: '4', name: '교외연구과제신청 지원사업(Seedmoney)', link: HP + '2_2_1', sections: [
+    { h: '1. 사업목적', lines: ['- 교외 연구 전문기관에서 공모하는 연구과제의 계획서 제출 시 소요되는 경비를 지원함으로써 연구자들의 교외연구과제 수주 가능성과 의욕을 높이기 위함'] },
+    { h: '2. 신청자격', lines: ['- 교외 연구 전문기관(단, 중앙정부)의 연구과제 공모에 계획서를 제출한 연구책임자인 본교 전임교원에 한하여 지원함을 원칙으로 한다.', '- 본 사업의 신청자와 제출한 계획서의 총괄책임자는 동일인이어야 한다.', '- 연구과제 선정과정이 예비계획서(또는 기술제안서, 아이디어 공모 등)와 본 계획서 평가로 나누어지는 경우, 본 계획서 평가대상으로 선정된 경우에 한하여 지원한다.', '- 개인 단독과제의 경우에는 지원을 제한하며, 전임교원(타교포함) 3인 이상이 참여하는 공동과제의 경우에만 지원한다.'] },
+    { h: '3. 지원금액', lines: [], table: { head: ['계열', '연간 연구비 규모', '상한액'], rows: [['이·공·의학', '1억 ~ 2억원미만', '50만원'], ['이·공·의학', '2억원이상 ~ 5억원미만', '100만원'], ['이·공·의학', '5억원이상 ~ 10억원미만', '200만원'], ['이·공·의학', '10억원 이상', '300만원'], ['인문·사회', '5천만원 ~ 1억원미만', '50만원'], ['인문·사회', '1억원이상 ~ 3억원미만', '100만원'], ['인문·사회', '3억원이상 ~ 5억원미만', '200만원'], ['인문·사회', '5억원 이상', '300만원']] } },
+  ] },
+  { id: 'b5', no: '5', name: '학술행사개최 지원사업', link: HP + '2_2_8', sections: [
+    { h: '1. 사업목적', lines: ['- 교내에 학술교류의 장인 학술행사(국내, 국제)의 개최를 지원하여 교내 연구활동 및 학술교류 활성화에 기여함'] },
+    { h: '2. 신청자격', lines: ['1) 신청기관(대학(원), 학과(부), 연구소)이 해당 학술대회 초청장, Pamphlet, Proceeding 등을 통하여 주관기관 또는 주최기관임이 확인되어야 한다.', '2) 총 참가자수가 25인 이상 규모의 학술행사를 지원한다.', '3) 학술행사 프로그램(초청장, Pamphlet, 현수막 등으로 증빙)을 통하여 교내에서 개최함을 원칙으로 한다.'] },
+    { h: '3. 지원대상 학술행사 구분', lines: ['1) 공통요건 : 논문 발표자, 토론자의 구성이 2개소 이상의 외부기관 소속 연구자를 포함하고 있는 학술행사(교내 연구자만으로 구성된 경우는 제외)', '2) 국제학술행사 : 논문 발표자, 토론자의 구성이 한국을 제외한 2개소 이상의 국외 연구기관 소속 연구원을 포함하고 있는 학술행사', '3) 국내학술행사 : 공통요건을 충족하면서 국제학술행사가 아닌 전국규모의 학술행사'] },
+    { h: '4. 지원금액', lines: ['1) 국내학술행사: 200만원 (기관당 연 1회에 한하여 지원)', '2) 국제학술행사: 400만원 (기관당 연 1회에 한하여 지원)'] },
+  ] },
+  { id: 'b6', no: '6', name: '외국석학초청경비 지원사업', link: HP + '2_2_5', sections: [
+    { h: '1. 사업목적', lines: ['- 국제적으로 저명한 외국 석학을 초청하여 국제수준의 학술활동을 지원함으로써 외국 석학과의 유대를 강화하고 교수의 연구수준을 국제화하며 국제학술행사 등을 추진 할 수 있는 계기를 마련함'] },
+    { h: '2. 신청자격', lines: ['1) 학술강연을 위해 외국석학을 초청하는 대학(원), 학과(부), 연구소(대학간 연구소, 대학교부설연구소에 한함) 등 본교 소속기관의 장이 신청하여야 한다.', '2) 행사 개최일 기준으로 본교에 재학하고 있는 대학원생이 자체 학술행사를 기획하는 경우, 지도교수의 확인서, 학술대회 기획안, Pamphlet, Proceeding 등을 통하여 신청가능하다.'] },
+    { h: '3. 지원 대상(아래의 모든 조건을 충족하는 경우)', lines: ['1) 국제적으로 학술적인 권위와 저명도가 높은 학자로 학술회의 및 학회 수상자, 국제적 저명상 수상자, Editor 및 Editorial Board Member', '2) 정교수급 이상'] },
+    { h: '4. 지원내용', lines: ['- 강연료(150만원/회 이내) 등, 인당 최대 300만원 지원'] },
+  ] },
+  { id: 'b7', no: '7', name: '전문학술저서출판 지원사업', link: HP + '2_2_6', sections: [
+    { h: '1. 사업목적', lines: ['연세대학교 소속 교원이 저서를 출판할 경우 실비를 지원함으로써 우수한 전문 학술저서 산출을 도모함'] },
+    { h: '2. 지원대상', lines: ['- 연세대학교 미래캠퍼스 소속 전임교원이 본교 학술출판회 출판문화원(이하 ‘출판문화원’) 또는 ISSN(International Standard Serial Number) / ISBN(International Standard Book Number)이 부여된 간행물을 출판하는 출판사를 통하여 출판한 전문 학술 저서 (※ 교과서 성격의 저서는 제외)'] },
+    { h: '3. 지원금액', lines: ['가. 출판문화원 심의를 통한 출판 시에는 출판문화원에서 출판비용 전부를 부담(연구자가 직접 출판문화원에 문의 및 신청)', '나. 저자부담으로 출판문화원을 통해 출판 시 소요되는 실비의 50%를 미래연구처에서 지원(단, 저서당 최대 일천만원 한도 내에서 지원)', '다. 출판문화원 외 출판사를 통하여 출판 시 소요되는 실비의 50%를 미래연구처에서 지원(단, 저서당 최대 오백만원 한도 내에서 지원)', '라. 전문 학술 저서 중 국내출판물을 외국어로 번역하여 출판하는 경우 미래연구처 지원금액인 50%는 인건비로 사용 가능'] },
+  ] },
+  { id: 'b8', no: '8', name: '정책연구지원사업', link: HP + '2_2_7', sections: [
+    { h: '1. 사업목적', lines: ['교내 연구역량 강화와 우리 대학교 발전을 위한 필요성이 있는 연구를 지원하여, 교내 연구역량을 높이고 연구 환경을 조성함'] },
+    { h: '2. 지원대상', lines: ['신청일 현재 본교에 재직하고 있는 전임교원과 직원을 대상으로 한다.(교내기관에서 신청하는 경우, 해당 기관의 장이 신청하여야 한다.)'] },
+    { h: '3. 지원분야', lines: ['1) 교내 연구역량 강화를 위한 필요성이 인정되는 경우', '2) 학교 발전을 위하여 필요성이 인정되는 경우'] },
+    { h: '4. 지원금액', lines: ['최대 1천만원 한도(기관 단위 신청)'] },
+    { h: '5. 사업 종료 시', lines: ['결과보고서 제출 및 유관 부서 대상 결과발표회 진행 필요'] },
+  ] },
+  { id: 'b9', no: '9', name: '박사후연구원(POST-DOC 및 연구교수) 지원사업', link: HP + '2_2_9', sections: [
+    { h: '1. 사업목적', lines: ['국내·외 우수 연구인력을 대학에 유치하여 대학의 연구활성화 및 국제적 연구 경쟁력 강화하기 위함'] },
+    { h: '2. 지원대상', lines: ['전 학문분야 국내·외 박사학위 소지자 중 미래캠퍼스 전임교원의 추천을 받은 자'] },
+    { h: '3. 제한사항', lines: ['1) BK21플러스 등에 참여하는 POST-DOC 및 국가지원 박사후사업 대상자는 교내박사후연구원 지원사업에 신청할 수 없음(POST-DOC. 의 이중지원 불가)', '2) 추천교수 당 2명을 초과하여 신청할 수 없음.(지원 중인 대상 포함)', '3) 추천교수가 부담하는 인건비 중 추천교수 과제(또는 현금)에서 인건비의 50% 이상을 반드시 부담'] },
+    { h: '4. 지원금액', lines: ['박사후연구원(최대 1,400만원), 연구교수(최대 1,800만원) 및 기관부담금 일부 지원', '!※ 2027학년도 사업부터 박사후연구원으로 통합 모집, 최대 1,800만원 지원 및 기관부담금 일부 지원'] },
+  ] },
+  { id: 'b10', no: '10', name: '연세미래선도연구사업', link: HP + '2_2_10', sections: [
+    { h: '1. 사업목적', lines: ['신진 연구자의 도전적 연구를 촉진하고, 연구 환경 조기 구축에 기여함'] },
+    { h: '2. 지원대상', lines: ['정년트랙 전임교원(공고일 기준 직전학년도 2학기 및 당해학년도 1학기 임용 신임교원)'] },
+    { h: '3. 사업내용', lines: ['가. 인문/사회: 1.5천만원/3년', '나. 이학/공학: 3천만원/3년'] },
+  ] },
+  { id: 'b11', no: '11', name: '연구기구 지원사업', sections: [
+    { h: '1. 사업목적', lines: ['연구기구를 지원함으로써 연구기구의 연구력 향상과 학문적 성과 산출을 도모함'] },
+    { h: '2. 지원금액', lines: ['- 최소 지원금액 300만원', '- 연구기구별 지원금액은 상이함', '!※ 2027학년도부터는 연구기구로 제출하는 직전학년도 운영보고서의 평가 결과에 따라 기본 운영비를 차등 지급함'] },
+  ] },
+  { id: 'b12', no: '12', name: '융·복합연구회 지원사업', link: HP + '2_2_11', sections: [
+    { h: '1. 사업목적', lines: ['학제간 융·복합 연구 활성화를 위한 연구환경 조성'] },
+    { h: '2. 신청 자격', lines: ['- 신청일 기준 본교 전임교원인 경우 신청 가능하다.(단, 원주의과대학, 원주간호대학 제외)', '- 2개 이상의 학과(부) 소속 전임교원 3명 이상으로 연구회를 구성함을 원칙으로 한다.(같은 대학 내 2개 이상의 학과도 연구회 구성 가능)'] },
+    { h: '3. 지원 기준 및 지원 금액', lines: ['팀당 연간 2백만원 이내(1년간)'] },
+  ] },
+];
+BIZ.forEach((b) => {
+  b.label = b.no + '. ' + b.name;
+  b.use = USE_Q.map((t, i) => Object.assign({ id: b.id + '_u' + (i + 1), no: String(i + 1) }, t));
+});
+const NONE = '해당 사업 없음';
+const SEL = Q('sel', '1', '최근 1년간 참여한 경험이 있는 사업을 모두 선택하여 주십시오. (복수응답 가능)', 'multi', BIZ.map((b) => b.label).concat([NONE]), { none: NONE, hint: '선택하신 사업에 대해서만 다음 페이지부터 만족도와 개선사항을 질문합니다.' });
+
+const CLOSING = [
+  Q('z1', '1', '교내 연구진흥사업 중 앞으로 가장 참여의향이 있는 사업을 세 가지만 선택하여 주십시오.', 'multi', ALL_PROGRAMS.slice(), { exact: 3 }),
+  Q('z2', '2', '[공통(서술형)] 교내 연구진흥사업 이용에 관한 이용이나 신규 지원사업에 대한 제안을 자유롭게 작성해주십시오. 귀하의 소중한 의견을 반영하여 보다 나은 서비스를 제공하도록 노력하겠습니다.', 'text', [], { opt: true, hint: '예시: 매 학기 초마다 제도 홍보 이메일을 발송해주었으면 좋겠다 / OOOO을 지원하는 제도가 마련되었으면 좋겠다. OOOO지원사업의 지원자격의 조정 등' }),
+];
+const QMAP = {};
+[...COMMON, SEL, ...CLOSING, ...BIZ.flatMap((b) => b.use)].forEach((q) => { QMAP[q.id] = q; });
+/* ---------- 설문 내용 끝 ---------- */
+
+const $app = document.getElementById('app');
+const S = { answers: {}, step: 0, completed: false, ready: false, db: null, dl: null, mcp: null, driveMsg: '', driveUrl: '', driving: false,
+            uid: null, canSave: false, canEdit: false, view: 'survey', saveErr: false, returning: false, rows: null, authMsg: '' };
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const bizById = (id) => BIZ.find((b) => b.id === id);
+const selectedBiz = () => { const sel = S.answers.sel; return Array.isArray(sel) ? BIZ.filter((b) => sel.includes(b.label)) : []; };
+const steps = () => [{ t: 'intro' }, { t: 'common' }, { t: 'select' }, ...selectedBiz().map((b) => ({ t: 'biz', id: b.id })), { t: 'closing' }, { t: 'done' }];
+
+function visibleQs(step) {
+  if (step.t === 'common') return COMMON;
+  if (step.t === 'closing') return CLOSING;
+  if (step.t === 'select') return [SEL];
+  if (step.t === 'biz') return bizById(step.id).use;
+  return [];
+}
+function answered(q) {
+  if (q.opt) return true;
+  const v = S.answers[q.id];
+  if (q.type === 'multi') return Array.isArray(v) && (q.exact ? v.length === q.exact : v.length > 0);
+  if (q.type === 'text') return typeof v === 'string' && v.trim() !== '';
+  return v !== undefined && v !== '';
+}
+const stepOk = (step) => visibleQs(step).every(answered);
+
+/* ---------- 저장 ---------- */
+let chain = Promise.resolve();
+function pruned() {
+  const keep = new Set();
+  steps().forEach((st) => visibleQs(st).forEach((q) => { keep.add(q.id); keep.add(q.id + '_etc'); }));
+  const out = {};
+  Object.keys(S.answers).forEach((k) => { if (keep.has(k)) out[k] = S.answers[k]; });
+  return out;
+}
+function save(done) {
+  if (!S.canSave) return Promise.resolve(false);
+  const answers = pruned();
+  const payload = { answers, completed: done ? true : S.completed, headers: rowHeaders(), cells: rowCells(answers) };
+  chain = chain.then(() => gs('saveResponse', payload)).then((r) => { S.saveErr = !(r && r.ok); return !S.saveErr; }, () => { S.saveErr = true; return false; });
+  return chain;
+}
+
+/* ---------- 화면 조각 ---------- */
+function qHTML(q) {
+  const v = S.answers[q.id];
+  const arr = Array.isArray(v) ? v : [];
+  const limit = q.exact || q.max || 0;
+  let body = '';
+  if (q.type === 'single') {
+    body = q.opts.map((o) => `<label class="opt${v === o ? ' on' : ''}"><input type="radio" name="${q.id}" value="${esc(o)}"${v === o ? ' checked' : ''}><span>${esc(o)}</span></label>`).join('');
+  } else if (q.type === 'multi') {
+    body = q.opts.map((o) => {
+      const on = arr.includes(o);
+      const dis = limit && !on && arr.length >= limit;
+      return `<label class="opt${on ? ' on' : ''}${dis ? ' dis' : ''}"><input type="checkbox" name="${q.id}" value="${esc(o)}"${on ? ' checked' : ''}${dis ? ' disabled' : ''}><span>${esc(o)}</span></label>`;
+    }).join('');
+  } else {
+    body = `<textarea name="${q.id}" aria-label="${esc(q.text)}" placeholder="(답변: 주관식으로 기입/장문형)">${esc(v || '')}</textarea>`;
+  }
+  if (q.other) {
+    const show = q.type === 'multi' ? arr.includes(q.other) : v === q.other;
+    body += `<input class="other" type="text" data-etc="${q.id}" aria-label="직접 입력" placeholder="직접 입력"${show ? '' : ' hidden'} value="${esc(S.answers[q.id + '_etc'] || '')}">`;
+  }
+  const cnt = q.exact ? ` <em class="cnt">(${arr.length} / ${q.exact} 선택)</em>` : '';
+  return `<fieldset data-q="${q.id}"><legend><span class="qn">Q${esc(q.no)}</span>${esc(q.text)}${q.opt && q.type !== 'text' ? ' <em>(선택)</em>' : ''}${cnt}</legend>${q.hint ? `<div class="qhint">${esc(q.hint)}</div>` : ''}${body}</fieldset>`;
+}
+function lineHTML(l) {
+  let cls = 'ln', t = l;
+  for (;;) {
+    if (t[0] === '!') { cls += ' warn'; t = t.slice(1); } else if (t[0] === '>') { cls += ' sub'; t = t.slice(1); } else break;
+  }
+  return `<div class="${cls}">${esc(t)}</div>`;
+}
+function tableHTML(tb) {
+  const cell = (c, tag) => { const w = c[0] === '!'; return `<${tag}${w ? ' class="warn"' : ''}>${esc(w ? c.slice(1) : c)}</${tag}>`; };
+  return `<div class="tbl"><table><thead><tr>${tb.head.map((h) => cell(h, 'th')).join('')}</tr></thead><tbody>${tb.rows.map((r) => `<tr>${r.map((c) => cell(c, 'td')).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function infoHTML(b) {
+  const link = b.link ? `<p class="more">※ 자세한 사항은 <a href="${esc(b.link)}" target="_blank" rel="noopener">홈페이지 참조</a></p>` : '';
+  return `<div class="info"><div class="info-h">&lt;사업 주요 내용 안내&gt;</div>` +
+    b.sections.map((s) => `<div class="sec"><div class="sec-h">${esc(s.h)}</div>${(s.lines || []).map(lineHTML).join('')}${s.table ? tableHTML(s.table) : ''}${(s.after || []).map(lineHTML).join('')}</div>`).join('') + link + '</div>';
+}
+function progressHTML(idx, list) {
+  const total = list.length - 2;
+  const st = list[idx];
+  const label = st.t === 'common' ? '공통 질문' : st.t === 'select' ? '사업 선택' : st.t === 'closing' ? '마무리 공통 질문' : '선택한 사업 질문 ' + (selectedBiz().findIndex((x) => x.id === st.id) + 1) + ' / ' + selectedBiz().length;
+  return `<div class="prog"><div class="prog-meta"><span>${esc(label)}</span><span>${idx} / ${total}</span></div><div class="prog-bar"><i style="width:${(idx / total) * 100}%"></i></div></div>`;
+}
+function bannerHTML() {
+  if (!S.ready || S.canSave) return S.saveErr ? '<div class="banner">응답을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.</div>' : '';
+  return '<div class="banner">' + esc(S.authMsg || '학교 Google 계정으로 로그인한 상태에서만 응답할 수 있습니다. 로그인 계정을 확인한 뒤 페이지를 새로고침해 주세요.') + ' 한 계정당 응답은 한 건만 저장됩니다.</div>';
+}
+function navHTML(idx, label) {
+  return `<div class="nav"><div class="hint" id="hint"></div>
+    <button class="btn ghost" type="button" data-go="-1"${idx <= 1 ? ' hidden' : ''}>이전</button>
+    <button class="btn" type="button" id="next" data-go="1">${label}</button></div>`;
+}
+const SIGNOFF = '바쁘신 와중에도 소중한 시간을 내어 설문에 응답해주셔서 대단히 고맙습니다. 보내주신 의견을 참고하여 보다 나은 서비스를 제공하기 위해 노력하겠습니다.';
+
+function render() {
+  const list = steps();
+  const step = list[S.step];
+  let html = '';
+  if (step.t === 'intro') {
+    html = `${bannerHTML()}<div class="card"><div class="eyebrow">설문 안내</div>
+      <h1>교내 연구진흥사업 만족도 설문조사</h1>
+      <p>안녕하세요. 연세대학교 미래연구처 연구전략팀입니다.<br>미래연구처에서는 연구역량강화를 위해 다양한 교내 연구진흥사업을 운영하고 있습니다.</p>
+      <p>이번 만족도 설문조사를 통해 지난 1년여의 기간 동안 연구자분들께서 이용해주신 연구진흥사업에 대한 의견을 수렴하여 향후 연구진흥사업의 개선 방향성을 설정하고자 합니다.</p>
+      <p>모든 응답은 익명이 보장되며, 설문 응답에는 약 10분가량의 시간이 소요될 것으로 예상됩니다.</p>
+      <p>연구자분들께서 내어주신 소중한 시간을 모아 더 나은 연구진흥사업으로 보답할 수 있도록 노력하겠습니다.</p>
+      <dl class="facts"><dt>조사기간</dt><dd>2026. 12. 1.(화) ~ 2026. 12. 31.(목) (응답률에 따라 기간을 연장할 수 있음)</dd><dt>조사대상</dt><dd>미래캠퍼스 전임교원 전원 대상 (일산캠퍼스 제외)</dd></dl>
+      ${!S.ready ? '<div class="nav"><span class="lead">로그인 상태를 확인하는 중…</span><button class="btn" type="button" disabled>시작하기</button></div>' : S.canSave ? `<div class="nav"><span></span><button class="btn" type="button" data-go="1">${Object.keys(S.answers).length ? '이어서 시작' : '시작하기'}</button></div>` : ''}</div>`;
+  } else if (step.t === 'common') {
+    html = progressHTML(S.step, list) + `<div class="card"><h2>공통질문</h2><p class="lead">응답자 특성과 사업 인지도에 대한 질문입니다.</p>${COMMON.map(qHTML).join('')}${navHTML(S.step, '다음')}</div>`;
+  } else if (step.t === 'select') {
+    html = progressHTML(S.step, list) + `<div class="card"><h2>사업 선택</h2><p class="lead">교내 연구진흥사업 중 최근 1년간 참여한 경험이 있는 사업을 선택해 주세요.</p>${qHTML(SEL)}${navHTML(S.step, '다음')}</div>`;
+  } else if (step.t === 'biz') {
+    const b = bizById(step.id);
+    const sel = selectedBiz();
+    const k = sel.findIndex((x) => x.id === b.id) + 1;
+    html = progressHTML(S.step, list) +
+      (k === 1 ? `<div class="notice"><p>지금부터는 선택하신 사업에 대한 질문이 이어집니다.</p><p>각 사업별 이용 만족도와 개선 요구 사항을 응답할 수 있습니다.</p></div>` : '') +
+      `<div class="card"><div class="eyebrow">사업 ${esc(b.no)} · 선택한 사업 ${k} / ${sel.length}</div><h2>${esc(b.name)}</h2>${infoHTML(b)}${b.use.map(qHTML).join('')}${navHTML(S.step, k === sel.length ? '마무리 질문으로' : '다음 사업')}</div>`;
+  } else if (step.t === 'closing') {
+    html = progressHTML(S.step, list) + `<div class="notice"><p>다음에 이어지는 ‘공통문항’이 질문 마지막 부문입니다.</p></div><div class="card"><h2>[마무리] 공통문항</h2>${CLOSING.map(qHTML).join('')}${navHTML(S.step, '제출하기')}</div>`;
+  } else {
+    html = `${bannerHTML()}<div class="card"><div class="eyebrow">제출 완료</div><h1>응답해 주셔서 감사합니다</h1>
+      <p class="lead">${!S.canSave ? '응답이 저장되지 않았습니다. 로그인 상태와 권한을 확인한 뒤 다시 제출해 주세요.' : S.returning ? '이미 제출하신 응답이 있습니다. 한 계정당 응답은 한 건만 저장되며, 수정 후 다시 제출하면 기존 응답이 새 내용으로 바뀝니다.' : '응답이 저장되었습니다.'}</p>
+      <p>${esc(SIGNOFF)}</p><p class="signoff">- 연세대학교 미래연구처 -</p>
+      <div class="nav"><span></span><button class="btn ghost" type="button" data-go="edit">응답 수정하기</button></div></div>`;
+  }
+  $app.innerHTML = (step.t === 'intro' || step.t === 'done') ? html : bannerHTML() + html;
+  updateNext();
+}
+
+function updateNext() {
+  const next = document.getElementById('next');
+  if (!next) return;
+  const ok = stepOk(steps()[S.step]);
+  next.disabled = !ok;
+  const hint = document.getElementById('hint');
+  if (hint) hint.textContent = ok ? '' : '필수 문항(선택 표시가 없는 문항)에 모두 응답하면 다음으로 넘어갈 수 있습니다.';
+}
+
+/* ---------- 입력 처리 ---------- */
+$app.addEventListener('change', (e) => {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement) || (el.type !== 'radio' && el.type !== 'checkbox')) return;
+  const q = QMAP[el.name];
+  if (!q) return;
+  const fs = el.closest('fieldset');
+  if (q.type === 'multi') {
+    const set = new Set(Array.isArray(S.answers[q.id]) ? S.answers[q.id] : []);
+    if (el.checked) set.add(el.value); else set.delete(el.value);
+    if (q.none) { if (el.value === q.none && el.checked) { set.clear(); set.add(q.none); } else if (el.checked) set.delete(q.none); }
+    const arr = q.opts.filter((o) => set.has(o));
+    S.answers[q.id] = arr;
+    const limit = q.exact || q.max || 0;
+    fs.querySelectorAll('input[type=checkbox]').forEach((i) => {
+      i.checked = arr.includes(i.value);
+      if (limit) i.disabled = !i.checked && arr.length >= limit;
+      const lab = i.closest('.opt');
+      lab.classList.toggle('on', i.checked);
+      lab.classList.toggle('dis', i.disabled);
+    });
+    const cnt = fs.querySelector('.cnt');
+    if (cnt && q.exact) cnt.textContent = '(' + arr.length + ' / ' + q.exact + ' 선택)';
+  } else {
+    S.answers[q.id] = el.value;
+    fs.querySelectorAll('.opt').forEach((l) => l.classList.toggle('on', l.contains(el) && el.checked));
+  }
+  if (q.other) {
+    const cur = S.answers[q.id];
+    const show = q.type === 'multi' ? (cur || []).includes(q.other) : cur === q.other;
+    const o = fs.querySelector('.other');
+    if (o) o.hidden = !show;
+  }
+  updateNext();
+});
+$app.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t instanceof HTMLTextAreaElement) S.answers[t.name] = t.value;
+  else if (t instanceof HTMLInputElement && t.dataset.etc) S.answers[t.dataset.etc + '_etc'] = t.value;
+  if (t instanceof HTMLTextAreaElement) updateNext();
+});
+$app.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-go]');
+  if (!btn || btn.disabled) return;
+  const go = btn.dataset.go;
+  const list = steps();
+  const cur = list[S.step];
+  if (go === 'edit') { S.step = 1; render(); window.scrollTo(0, 0); return; }
+  const dir = Number(go);
+  if (dir === 1 && cur.t === 'closing') {
+    btn.disabled = true;
+    await save(true);
+    S.completed = true;
+    S.returning = false;
+    S.step = list.length - 1;
+  } else {
+    if (dir === 1 && cur.t !== 'intro') save(false);
+    S.step = Math.max(0, Math.min(list.length - 1, S.step + dir));
+  }
+  render();
+  window.scrollTo(0, 0);
+});
+
+function csvColumns() {
+  const cols = [];
+  const add = (prefix, label, q) => {
+    cols.push([prefix + ' ' + label + ' ' + q.text, q.id]);
+    if (q.other) cols.push([prefix + ' ' + label + ' ' + q.text + ' (기타 내용)', q.id + '_etc']);
+  };
+  COMMON.forEach((q) => add('[공통]', 'Q' + q.no, q));
+  add('[사업 선택]', 'Q' + SEL.no, SEL);
+  BIZ.forEach((b) => b.use.forEach((q) => add('[' + b.label + ']', 'Q' + q.no, q)));
+  CLOSING.forEach((q) => add('[마무리]', 'Q' + q.no, q));
+  return cols;
+}
+function rowHeaders() { return csvColumns().map((c) => c[0]); }
+function rowCells(answers) {
+  return csvColumns().map((c) => { const v = answers[c[1]]; return v === undefined || v === null ? '' : (Array.isArray(v) ? v.join(' | ') : String(v)); });
+}
+/* google.script.run 을 Promise 로 감싼다 */
+const gs = (fn, ...args) => new Promise((ok, fail) => google.script.run.withSuccessHandler(ok).withFailureHandler(fail)[fn](...args));
+
+/* ---------- 시작 ---------- */
+render();
+gs('getMyState').then((st) => {
+  if (!st || !st.ok) { S.canSave = false; S.authMsg = (st && st.message) || ''; return; }
+  S.canSave = true;
+  const d = st.data;
+  if (d && d.answers && typeof d.answers === 'object') {
+    /* 저장된 응답이 늦게 도착해도, 이미 진행 중인 응답을 덮어쓰지 않는다 */
+    const started = S.step > 0;
+    S.answers = started ? Object.assign({}, d.answers, S.answers) : d.answers;
+    S.completed = !!d.completed;
+    if (S.completed && S.step === 0) { S.returning = true; S.step = steps().length - 1; }
+  }
+}).catch(() => { S.canSave = false; }).then(() => {
+  S.ready = true;
+  /* 응답을 시작한 뒤에는 화면을 다시 그리지 않는다 */
+  if (S.step <= 1 || S.returning) render();
+});
+</script>
+</body>
+</html>
