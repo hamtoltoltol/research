@@ -137,6 +137,61 @@ a.btn { text-decoration: none; display: inline-block; }
   <div id="app"></div>
 </div>
 <script>
+/* 설문 스크립트가 시작되지 못했을 때(문법 오류 등) 원인을 화면에 보여 줍니다. */
+window.addEventListener('error', function (ev) {
+  if (window.__mainStarted) return;
+  var app = document.getElementById('app');
+  if (!app || app.getAttribute('data-diag')) return;
+  app.setAttribute('data-diag', '1');
+  var NL = String.fromCharCode(10);
+  var out = ['오류: ' + (ev && ev.message ? ev.message : '알 수 없음')];
+  if (ev && ev.lineno) out.push('위치: ' + ev.lineno + '행 ' + (ev.colno || '') + '열');
+  try {
+    var el = document.getElementById('main-script');
+    var text = el ? (el.textContent || '') : '';
+    var lines = text.split(NL);
+    out.push('설문 코드: ' + lines.length + '줄, ' + text.length + '자');
+    // 1) 코드 안에 있으면 안 되는 이상한 문자 찾기
+    var odd = [];
+    for (var i = 0; i < lines.length && odd.length < 6; i++) {
+      for (var j = 0; j < lines[i].length; j++) {
+        var c = lines[i].charCodeAt(j);
+        var ok = (c >= 32 && c <= 126) || c === 9 || (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0x3131 && c <= 0x318E) || c === 0x2026 || c === 0xB7 || c === 0x203B || c === 0x2018 || c === 0x2019 || c === 0x201C || c === 0x201D || (c >= 0x2160 && c <= 0x217F);
+        if (!ok) { odd.push((i + 1) + '줄 ' + (j + 1) + '번째 글자: U+' + c.toString(16).toUpperCase()); break; }
+      }
+    }
+    if (odd.length) out.push('의심스러운 문자:' + NL + odd.join(NL));
+    // 2) 코드를 덩어리로 나눠 문법이 틀린 덩어리 찾기
+    var starts = ['function ', 'const ', 'let ', 'var ', '$app', 'gs(', 'render(', '/*'];
+    var chunks = [], cur = [], curStart = 1;
+    for (var k = 0; k < lines.length; k++) {
+      var isStart = false;
+      for (var s = 0; s < starts.length; s++) if (lines[k].indexOf(starts[s]) === 0) isStart = true;
+      if (isStart && cur.length) { chunks.push({ at: curStart, lines: cur }); cur = []; curStart = k + 1; }
+      cur.push(lines[k]);
+    }
+    if (cur.length) chunks.push({ at: curStart, lines: cur });
+    for (var m = 0; m < chunks.length; m++) {
+      try { new Function(chunks[m].lines.join(NL)); } catch (e) {
+        if (e && e.name === 'SyntaxError') {
+          out.push('문법 오류가 있는 부분 (설문 코드 ' + chunks[m].at + '줄부터): ' + e.message);
+          out.push(chunks[m].lines.slice(0, 8).map(function (l) { return l.length > 180 ? l.slice(0, 180) + '…' : l; }).join(NL));
+          break;
+        }
+      }
+    }
+  } catch (e2) { out.push('진단 중 오류: ' + e2.message); }
+  app.innerHTML = '';
+  var card = document.createElement('div'); card.className = 'card';
+  var h1 = document.createElement('h2'); h1.textContent = '설문 화면을 불러오지 못했습니다'; card.appendChild(h1);
+  var p1 = document.createElement('p'); p1.className = 'lead'; p1.textContent = '아래 내용을 화면 그대로 담당자에게 전달해 주세요.'; card.appendChild(p1);
+  var pre = document.createElement('pre'); pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font-size:12px;background:#f1f4f5;color:#14232b;padding:10px;border-radius:8px;overflow:auto';
+  pre.textContent = out.join(NL + NL); card.appendChild(pre);
+  app.appendChild(card);
+});
+</script>
+<script id="main-script">
+window.__mainStarted = true;
 /* ---------- 설문 내용은 구글 시트에서 읽어 옵니다 (코드를 고칠 필요 없음) ---------- */
 const Q = (id, no, text, type, opts, o) => Object.assign({ id, no, text, type, opts: opts || [] }, o || {});
 let META = {}, COMMON = [], BIZ = [], CLOSING = [], SEL = null;
@@ -249,7 +304,7 @@ function navHTML(idx, label) {
     <button class="btn ghost" type="button" data-go="-1"${idx <= 1 ? ' hidden' : ''}>이전</button>
     <button class="btn" type="button" id="next" data-go="1">${label}</button></div>`;
 }
-const para = (t) => esc(t).replace(/\n/g, '<br>');
+const para = (t) => esc(t).split(String.fromCharCode(10)).join('<br>');
 
 function render() {
   const list = steps();
