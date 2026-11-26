@@ -25,9 +25,22 @@ const TYPE_MAP = { '단일선택': 'single', '복수선택': 'multi', '서술형
  * ==================================================================== */
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('교내 연구진흥사업 만족도 설문조사')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  // 설치할 때 파일 이름을 조금 다르게 만든 경우(index, Index.html 등)도 찾아 봅니다.
+  const names = ['Index', 'index', 'INDEX', 'Index.html', 'index.html'];
+  for (let i = 0; i < names.length; i++) {
+    let out = null;
+    try { out = HtmlService.createHtmlOutputFromFile(names[i]); } catch (e) { out = null; }
+    if (out) {
+      return out.setTitle('교내 연구진흥사업 만족도 설문조사')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    }
+  }
+  return HtmlService.createHtmlOutput(
+    '<div style="font-family:sans-serif;max-width:560px;margin:40px auto;padding:0 16px;line-height:1.6">' +
+    '<h2>설치가 끝나지 않았습니다</h2>' +
+    '<p>Apps Script 프로젝트에서 <b>Index</b> 라는 이름의 <b>HTML 파일</b>을 찾을 수 없습니다.</p>' +
+    '<p>담당자는 왼쪽 파일 목록에서 <b>+ → HTML</b>로 파일을 만들고 이름을 <b>Index</b>(영문 대소문자 그대로, 확장자 없이)로 한 뒤 Index.html 내용을 붙여넣고 저장하세요. ' +
+    '그다음 <b>배포 → 배포 관리 → 연필 아이콘 → 버전: 새 버전 → 배포</b>를 해야 링크에 반영됩니다.</p></div>');
 }
 
 /** 화면을 만드는 데 필요한 문항 설정과, 접속한 사람의 이전 응답을 한 번에 돌려줍니다. */
