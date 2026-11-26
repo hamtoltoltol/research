@@ -95,6 +95,9 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, .opt:focus-wi
 .nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
 .hint { font-size: 13px; color: var(--muted); flex: 1 1 100%; order: -1; min-height: 1.4em; }
 .btn { font: inherit; font-weight: 600; border-radius: 10px; padding: 11px 22px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+a.btn { text-decoration: none; display: inline-block; }
+.steps-help { margin: 14px 0 0; padding-left: 1.3em; font-size: 14px; color: var(--muted); }
+.steps-help li { margin-bottom: 4px; }
 .btn.ghost { background: transparent; color: var(--accent); }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 .toc { overflow-x: auto; margin: 14px 0 6px; }
@@ -356,12 +359,35 @@ $app.addEventListener('click', async (e) => {
 /* google.script.run 을 Promise 로 감싼다 */
 const gs = (fn, ...args) => new Promise((ok, fail) => google.script.run.withSuccessHandler(ok).withFailureHandler(fail)[fn](...args));
 
+/* ---------- 로그인 안내 : 학교 계정이 아닐 때 계정을 바꿀 수 있게 한다 ---------- */
+function renderLogin(info) {
+  const domain = info.domain || 'yonsei.ac.kr';
+  const url = info.url && info.url.indexOf('https://') === 0 ? info.url : '';
+  const chooser = url ? 'https://accounts.google.com/AccountChooser?hd=' + encodeURIComponent(domain) + '&continue=' + encodeURIComponent(url) : '';
+  $app.innerHTML = `<div class="card"><div class="eyebrow">로그인 필요</div>
+    <h1>학교 구글 계정으로 로그인해 주세요</h1>
+    <p class="lead">이 설문은 <b>@${esc(domain)}</b> 계정으로만 응답할 수 있습니다. 한 계정당 응답은 한 건만 저장됩니다.</p>
+    ${info.msg ? `<div class="banner">${esc(info.msg)}</div>` : ''}
+    ${info.email ? `<p>현재 로그인한 계정: <b>${esc(info.email)}</b></p>` : ''}
+    <div class="nav" style="justify-content:flex-start;gap:10px">
+      ${chooser ? `<a class="btn" href="${esc(chooser)}" target="_top" rel="noopener">다른 구글 계정으로 로그인</a>` : ''}
+      <button class="btn ghost" type="button" id="relogin">로그인 후 새로고침</button>
+    </div>
+    <ol class="steps-help">
+      <li>위 버튼을 눌러 구글 계정 선택 화면에서 <b>학교 계정(@${esc(domain)})</b>을 고르거나 "다른 계정 사용"으로 로그인합니다.</li>
+      <li>버튼이 동작하지 않으면 구글 화면 오른쪽 위 프로필 → <b>다른 계정 추가</b>로 학교 계정을 로그인한 뒤, 이 링크를 다시 열어 주세요.</li>
+      <li>개인 계정과 학교 계정이 섞여 계속 막히면 <b>시크릿(비공개) 창</b>에서 링크를 열어 학교 계정으로만 로그인해 보세요.</li>
+    </ol></div>`;
+  const b = document.getElementById('relogin');
+  if (b) b.addEventListener('click', () => { try { window.top.location.reload(); } catch (e) { location.reload(); } });
+}
+
 /* ---------- 시작 ---------- */
 $app.innerHTML = '<div class="card"><p class="lead">설문을 불러오는 중…</p></div>';
 gs('boot').then((res) => {
-  applyConfig(res.config);
   const st = res.state;
-  if (!st || !st.ok) { S.canSave = false; S.authMsg = (st && st.message) || ''; return; }
+  if (!st || !st.ok) { S.canSave = false; S.needLogin = { msg: (st && st.message) || '', email: (st && st.email) || '', domain: (st && st.domain) || '', url: res.webUrl || '' }; return; }
+  applyConfig(res.config);
   S.canSave = true;
   const d = st.data;
   if (d && d.answers && typeof d.answers === 'object') {
@@ -372,6 +398,7 @@ gs('boot').then((res) => {
   }
 }).catch(() => { S.canSave = false; S.loadFailed = true; }).then(() => {
   S.ready = true;
+  if (S.needLogin) { renderLogin(S.needLogin); return; }
   if (S.loadFailed) { $app.innerHTML = '<div class="card"><div class="banner">설문을 불러오지 못했습니다. 페이지를 새로고침해 주세요. 계속되면 담당자에게 알려 주세요.</div></div>'; return; }
   render();
 });

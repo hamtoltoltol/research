@@ -32,9 +32,10 @@ function doGet() {
 
 /** 화면을 만드는 데 필요한 문항 설정과, 접속한 사람의 이전 응답을 한 번에 돌려줍니다. */
 function boot() {
-  const config = getConfig_();
   const who = currentUser_();
-  if (!who.ok) return { config: config, state: { ok: false, message: who.message } };
+  const webUrl = ScriptApp.getService().getUrl() || '';
+  if (!who.ok) return { state: { ok: false, message: who.message, email: who.email || '', domain: ALLOWED_DOMAINS.join(', ') }, webUrl: webUrl };
+  const config = getConfig_();
   const sheet = rawSheet_();
   const row = findRow_(sheet, who.key);
   let data = null;
@@ -46,7 +47,7 @@ function boot() {
       data = null;
     }
   }
-  return { config: config, state: { ok: true, data: data } };
+  return { config: config, state: { ok: true, data: data }, webUrl: webUrl };
 }
 
 /** 응답을 저장합니다. 같은 계정이 다시 저장하면 기존 응답이 새 내용으로 바뀝니다. */
@@ -402,10 +403,11 @@ function rebuildResults_(cfg) {
 function currentUser_() {
   const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
   if (!email) {
-    return { ok: false, message: '로그인한 Google 계정을 확인할 수 없습니다. 학교 Google 계정으로 로그인한 뒤 다시 열어 주세요.' };
+    // 학교 도메인 밖의 계정(개인 Gmail 등)은 구글이 이메일을 알려 주지 않아 이 경우로 들어옵니다.
+    return { ok: false, message: '지금 로그인된 구글 계정이 학교 계정이 아니거나 확인할 수 없습니다.' };
   }
   if (ALLOWED_DOMAINS.length && ALLOWED_DOMAINS.indexOf(email.split('@')[1]) === -1) {
-    return { ok: false, message: '허용된 학교 Google 계정으로 로그인한 경우에만 응답할 수 있습니다.' };
+    return { ok: false, email: email, message: '이 설문은 학교 구글 계정으로만 응답할 수 있습니다.' };
   }
   return { ok: true, key: hash_(email) };
 }
