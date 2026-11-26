@@ -441,6 +441,7 @@ function renderLogin(info) {
 $app.innerHTML = '<div class="card"><p class="lead">설문을 불러오는 중…</p></div>';
 gs('boot').then((res) => {
   const st = res.state;
+  if (st && st.setup) { S.canSave = false; S.needSetup = st.message || ''; return; }
   if (!st || !st.ok) { S.canSave = false; S.needLogin = { msg: (st && st.message) || '', email: (st && st.email) || '', domain: (st && st.domain) || '', url: res.webUrl || '' }; return; }
   applyConfig(res.config);
   S.canSave = true;
@@ -453,6 +454,7 @@ gs('boot').then((res) => {
   }
 }).catch(() => { S.canSave = false; S.loadFailed = true; }).then(() => {
   S.ready = true;
+  if (S.needSetup !== undefined) { $app.innerHTML = '<div class="card"><h2>설문을 준비하고 있습니다</h2><p class="lead"></p></div>'; $app.querySelector('.lead').textContent = S.needSetup || '잠시 후 다시 열어 주세요.'; return; }
   if (S.needLogin) { renderLogin(S.needLogin); return; }
   if (S.loadFailed) { $app.innerHTML = '<div class="card"><div class="banner">설문을 불러오지 못했습니다. 페이지를 새로고침해 주세요. 계속되면 담당자에게 알려 주세요.</div></div>'; return; }
   render();

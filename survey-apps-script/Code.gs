@@ -17,7 +17,6 @@ const RESULT_SHEET = '응답';
 const RAW_SHEET = '원본';
 const MAX_PAYLOAD_CHARS = 120000;
 const CACHE_SECONDS = 300;
-const MAX_OPTIONS = 15;
 const TYPE_MAP = { '단일선택': 'single', '복수선택': 'multi', '서술형': 'text' };
 
 /* ====================================================================
@@ -48,6 +47,9 @@ function boot() {
   const who = currentUser_();
   const webUrl = ScriptApp.getService().getUrl() || '';
   if (!who.ok) return { state: { ok: false, message: who.message, email: who.email || '', domain: ALLOWED_DOMAINS.join(', ') }, webUrl: webUrl };
+  if (!layoutOk_()) {
+    return { state: { ok: false, setup: true, message: '설문을 준비하고 있습니다. 잠시 후 다시 열어 주세요.' }, webUrl: webUrl };
+  }
   const config = getConfig_();
   const sheet = rawSheet_();
   const row = findRow_(sheet, who.key);
@@ -130,10 +132,10 @@ function setupSheets() {
     const r = ui.alert('이미 문항이 있습니다', '샘플 문항으로 다시 채우면 지금 적혀 있는 문항과 안내문이 모두 지워집니다. 계속할까요?', ui.ButtonSet.YES_NO);
     if (r !== ui.Button.YES) return;
   }
-  writeTab_(TAB.notice, ['항목', '내용'], SEED.notice, [140, 560], null);
+  writeTab_(TAB.notice, SEED.heads.notice, SEED.notice, [150, 640, 360], 'notice');
   writeTab_(TAB.common, SEED.heads.question, SEED.common, questionWidths_(), 'question');
-  writeTab_(TAB.biz, ['번호', '사업명', '홈페이지 링크', '사용', 'ID'], SEED.bizList, [70, 320, 360, 70, 90], 'biz');
-  writeTab_(TAB.info, ['사업번호', '소제목', '내용', '표시'], SEED.info, [80, 200, 620, 100], 'info');
+  writeTab_(TAB.biz, SEED.heads.biz, SEED.bizList, [70, 320, 360, 70, 90], 'biz');
+  writeTab_(TAB.info, SEED.heads.info, SEED.info, [80, 200, 640, 70], 'info');
   writeTab_(TAB.bizq, SEED.heads.bizq, SEED.bizq, [90].concat(questionWidths_()), 'bizq');
   writeTab_(TAB.closing, SEED.heads.question, SEED.closing, questionWidths_(), 'question');
   const order = [TAB.notice, TAB.common, TAB.biz, TAB.info, TAB.bizq, TAB.closing];
@@ -143,6 +145,10 @@ function setupSheets() {
 }
 
 function checkConfig() {
+  if (!layoutOk_()) {
+    SpreadsheetApp.getUi().alert('시트 형식이 이전 버전입니다', '메뉴 [설문 관리 > ① 샘플 문항 불러오기]를 다시 실행해 새 형식으로 바꿔 주세요. (지금 시트에 적힌 문항은 샘플로 덮어쓰이니, 고친 내용이 있으면 먼저 복사해 두세요.)', SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
   const problems = [];
   const cfg = buildConfig_(problems);
   const ui = SpreadsheetApp.getUi();
@@ -234,18 +240,20 @@ function readNotice_() {
   rows.forEach(function (r) {
     const k = String(r[0] || '').trim(), v = String(r[1] || '');
     if (!k || !v.trim()) return;
-    (m[k] = m[k] || []).push(v);
+    m[k] = m[k] ? m[k] + '\n\n' + v : v;
   });
-  const one = function (k, d) { return m[k] ? m[k][0] : d; };
+  const one = function (k, d) { return m[k] ? m[k].trim() : d; };
+  // 빈 줄(엔터 두 번)로 문단을 나눕니다. 문단 안의 줄바꿈은 그대로 줄바꿈으로 보입니다.
+  const paras = function (k) { return m[k] ? m[k].split(/\n\s*\n/).map(function (x) { return x.trim(); }).filter(Boolean) : []; };
   return {
     title: one('설문 제목', '설문조사'),
-    intro: m['소개 문단'] || [],
+    intro: paras('소개글'),
     period: one('조사기간', ''), target: one('조사대상', ''),
     commonTitle: one('공통질문 제목', '공통질문'), commonLead: one('공통질문 안내', ''),
     selectTitle: one('사업 선택 제목', '사업 선택'), selectLead: one('사업 선택 안내', ''),
     selectQ: one('사업 선택 질문', '참여한 경험이 있는 사업을 모두 선택하여 주십시오. (복수응답 가능)'),
     selectHint: one('사업 선택 보조설명', ''), noneLabel: one('해당없음 보기', ''),
-    bizNotice: m['사업별 질문 시작 안내'] || [],
+    bizNotice: paras('사업별 질문 시작 안내'),
     closingNotice: one('마무리 질문 시작 안내', ''), closingTitle: one('마무리 제목', '마무리 질문'),
     signoff: one('맺음말', ''), signer: one('서명', '')
   };
@@ -272,29 +280,33 @@ function readBusinesses_(problems, hidden) {
 function readInfo_(businesses, byNo, hidden, problems) {
   const sh = getSheet_(TAB.info);
   const rows = sh ? sh.getDataRange().getDisplayValues().slice(1) : [];
-  const KIND = { '일반': 'ln', '들여쓰기': 'sub', '강조': 'warn' };
   rows.forEach(function (r, i) {
-    const no = String(r[0] || '').trim(), head = String(r[1] || '').trim(), text = String(r[2] || '').trim(), kind = String(r[3] || '일반').trim();
-    if (!no && !head && !text) return;
+    const line = i + 2;
+    const no = String(r[0] || '').trim(), head = String(r[1] || '').trim(), text = String(r[2] || ''), kind = String(r[3] || '글').trim();
+    if (!no && !head && !text.trim()) return;
     const b = byNo[no];
-    if (!b) { if (no && !hidden[no]) problems.push('[' + TAB.info + '] ' + (i + 2) + '행: 사업번호 "' + no + '"가 사업목록에 없거나 사용 중이 아닙니다.'); return; }
+    if (!b) { if (no && !hidden[no]) problems.push('[' + TAB.info + '] ' + line + '행: 사업번호 "' + no + '"가 사업목록에 없거나 사용 중이 아닙니다.'); return; }
     let sec = b.sections[b.sections.length - 1];
     if (!sec || sec.h !== head) { sec = { h: head, items: [] }; b.sections.push(sec); }
-    if (!text) return;
-    if (kind === '표머리' || kind === '표행') {
-      const cells = text.split('|').map(function (c) { return c.trim(); });
-      let tb = sec.items[sec.items.length - 1];
-      if (!tb || tb.type !== 'table') { tb = { type: 'table', head: null, rows: [] }; sec.items.push(tb); }
-      if (kind === '표머리') tb.head = cells; else tb.rows.push(cells);
+    const lines = text.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+    if (!lines.length) return;
+    if (kind === '표') {
+      // 첫 줄은 표 머리, 나머지 줄은 표 행. 칸은 | 로 나눕니다.
+      const cell = function (c) { c = c.trim(); const m = /^\[강조\]\s*/.exec(c); return m ? '!' + c.slice(m[0].length) : c; };
+      const grid = lines.map(function (l) { return l.split('|').map(cell); });
+      sec.items.push({ type: 'table', head: grid[0], rows: grid.slice(1) });
     } else {
-      if (!KIND[kind]) problems.push('[' + TAB.info + '] ' + (i + 2) + '행: 표시 "' + kind + '"는 일반, 들여쓰기, 강조, 표머리, 표행 중 하나여야 합니다.');
-      sec.items.push({ type: 'line', t: text, cls: KIND[kind] || 'ln' });
+      if (kind !== '글') problems.push('[' + TAB.info + '] ' + line + '행: 종류는 글 또는 표여야 합니다.');
+      lines.forEach(function (l) {
+        let cls = 'ln', t = l, m;
+        // 줄 앞의 [강조](빨간 글씨), [들여쓰기] 표시를 읽습니다.
+        while ((m = /^\[(강조|들여쓰기)\]\s*/.exec(t))) {
+          t = t.slice(m[0].length);
+          cls = m[1] === '강조' ? 'warn' : (cls === 'warn' ? 'warn' : 'sub');
+        }
+        if (t) sec.items.push({ type: 'line', t: t, cls: cls });
+      });
     }
-  });
-  businesses.forEach(function (b) {
-    b.sections.forEach(function (s) {
-      s.items.forEach(function (it) { if (it.type === 'table' && !it.head) it.head = it.rows.length ? it.rows[0].map(function () { return ''; }) : []; });
-    });
   });
 }
 
@@ -306,7 +318,7 @@ function readQuestions_(tabName, offset, bizNames, problems) {
   return list;
 }
 
-/** 질문 행을 읽어 문항 객체로 바꿉니다. 열 순서: 번호, 질문, 유형, 필수, 보기1~15, 기타입력 보기, 최대 선택 수, 정확히 선택 수, 안내문, ID */
+/** 질문 행을 읽어 문항 객체로 바꿉니다. 열 순서: 번호, 질문, 유형, 필수, 보기(한 칸, 줄마다 하나), 최대 선택 수, 정확히 선택 수, 안내문, ID */
 function readQuestionRows_(rows, off, bizNames, tabName, problems) {
   const out = [];
   rows.forEach(function (r, i) {
@@ -316,26 +328,27 @@ function readQuestionRows_(rows, off, bizNames, tabName, problems) {
     const typeKo = String(r[off + 2] || '').trim();
     const type = TYPE_MAP[typeKo];
     if (!type) { problems.push('[' + tabName + '] ' + line + '행: 유형은 단일선택, 복수선택, 서술형 중 하나여야 합니다. (이 문항은 화면에 나오지 않습니다)'); return; }
-    let opts = [];
-    for (let k = 0; k < MAX_OPTIONS; k++) {
-      const o = String(r[off + 4 + k] || '').trim();
-      if (!o) continue;
-      if (o === '[사업목록]') opts = opts.concat(bizNames); else opts.push(o);
-    }
-    if (type !== 'text' && opts.length < 2) { problems.push('[' + tabName + '] ' + line + '행: 선택형 문항은 보기가 2개 이상 필요합니다. (이 문항은 화면에 나오지 않습니다)'); return; }
-    const other = String(r[off + 19] || '').trim();
-    if (other && opts.indexOf(other) === -1) problems.push('[' + tabName + '] ' + line + '행: "기타입력 보기"는 보기 중 하나와 똑같이 적어야 합니다.');
-    const max = parseInt(r[off + 20], 10) || 0;
-    const exact = parseInt(r[off + 21], 10) || 0;
+    let opts = [], other = '';
+    String(r[off + 4] || '').split('\n').forEach(function (raw) {
+      let t = raw.trim();
+      if (!t) return;
+      const m = /^\[직접입력\]\s*(.*)$/.exec(t);
+      if (m) { t = m[1].trim(); if (t) other = t; }
+      if (t === '[사업목록]') opts = opts.concat(bizNames); else if (t) opts.push(t);
+    });
+    if (type !== 'text' && opts.length < 2) { problems.push('[' + tabName + '] ' + line + '행: 선택형 문항은 보기가 2개 이상 필요합니다. 보기 칸에 한 줄에 하나씩 적어 주세요. (이 문항은 화면에 나오지 않습니다)'); return; }
+    if (opts.length > 40) problems.push('[' + tabName + '] ' + line + '행: 보기가 40개를 넘습니다.');
+    const max = parseInt(r[off + 5], 10) || 0;
+    const exact = parseInt(r[off + 6], 10) || 0;
     if (exact && exact > opts.length) problems.push('[' + tabName + '] ' + line + '행: "정확히 선택 수"가 보기 수보다 큽니다.');
     if (type !== 'multi' && (max || exact)) problems.push('[' + tabName + '] ' + line + '행: 최대/정확히 선택 수는 복수선택 문항에만 쓸 수 있습니다.');
-    const id = String(r[off + 23] || '').trim();
+    const id = String(r[off + 8] || '').trim();
     const q = {
       id: id || ('row' + line), no: String(r[off] || '').trim(), text: text, type: type, opts: type === 'text' ? [] : opts,
       opt: String(r[off + 3] || '').trim() === '아니오',
-      other: type === 'text' || opts.indexOf(other) === -1 ? '' : other,
+      other: type === 'text' ? '' : other,
       max: type === 'multi' ? max : 0, exact: type === 'multi' ? exact : 0,
-      hint: String(r[off + 22] || '').replace(/\[사업목록\]/g, bizNames.join(', '))
+      hint: String(r[off + 7] || '').replace(/\[사업목록\]/g, bizNames.join(', '))
     };
     out.push({ q: q, row: r, line: line });
   });
@@ -419,10 +432,19 @@ function currentUser_() {
     // 학교 도메인 밖의 계정(개인 Gmail 등)은 구글이 이메일을 알려 주지 않아 이 경우로 들어옵니다.
     return { ok: false, message: '지금 로그인된 구글 계정이 학교 계정이 아니거나 확인할 수 없습니다.' };
   }
-  if (ALLOWED_DOMAINS.length && ALLOWED_DOMAINS.indexOf(email.split('@')[1]) === -1) {
+  if (ALLOWED_DOMAINS.length && !domainAllowed_(email.split('@')[1])) {
     return { ok: false, email: email, message: '이 설문은 학교 구글 계정으로만 응답할 수 있습니다.' };
   }
   return { ok: true, key: hash_(email) };
+}
+
+/** yonsei.ac.kr 과 그 하위 도메인(예: xxx.yonsei.ac.kr)을 허용합니다. */
+function domainAllowed_(domain) {
+  domain = String(domain || '').toLowerCase();
+  return ALLOWED_DOMAINS.some(function (d) {
+    d = String(d).toLowerCase();
+    return domain === d || domain.slice(-(d.length + 1)) === '.' + d;
+  });
 }
 
 function hash_(email) {
@@ -492,9 +514,9 @@ function ensureIds_() {
       });
       if (changed) sh.getRange(2, idCol, updates.length, 1).setNumberFormat('@').setValues(updates);
     };
-    fill(TAB.common, 2, 24, 'q');
-    fill(TAB.closing, 2, 24, 'q');
-    fill(TAB.bizq, 3, 25, 'q');
+    fill(TAB.common, 2, 9, 'q');
+    fill(TAB.closing, 2, 9, 'q');
+    fill(TAB.bizq, 3, 10, 'q');
     fill(TAB.biz, 2, 5, 'x');
     props.setProperty('IDSEQ', String(seq));
   } finally {
@@ -504,10 +526,15 @@ function ensureIds_() {
 
 /* ---------- 시트 서식 ---------- */
 
+/** 시트가 현재 형식(안내문구 탭 C1 = '작성 안내')인지 확인합니다. 이전 버전 형식이면 false. */
+function layoutOk_() {
+  const sh = getSheet_(TAB.notice);
+  if (!sh) return false;
+  return String(sh.getRange(1, 3).getDisplayValue()) === '작성 안내';
+}
+
 function questionWidths_() {
-  const w = [60, 380, 90, 60];
-  for (let i = 0; i < MAX_OPTIONS; i++) w.push(160);
-  return w.concat([160, 80, 80, 240, 90]);
+  return [60, 380, 90, 60, 340, 80, 80, 260, 90];
 }
 
 function writeTab_(name, head, rows, widths, kind) {
@@ -521,26 +548,33 @@ function writeTab_(name, head, rows, widths, kind) {
   sh.setFrozenRows(1);
   sh.getRange(2, 1, Math.max(rows.length, 1), cols).setWrap(true).setVerticalAlignment('top');
   widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
-  // 입력 실수를 줄이는 드롭다운
   const list = function (col, values) {
     sh.getRange(2, col, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(false).build());
+  };
+  const gray = function (col) {
+    sh.getRange(1, col, 1, 1).setBackground('#8a9ba5');
+    sh.getRange(2, col, 500, 1).setBackground('#eef2f4');
   };
   const off = kind === 'bizq' ? 1 : 0;
   if (kind === 'question' || kind === 'bizq') {
     list(off + 3, ['단일선택', '복수선택', '서술형']);
     list(off + 4, ['예', '아니오']);
-    sh.getRange(1, off + 24, 1, 1).setBackground('#8a9ba5');
-    sh.getRange(2, off + 24, 500, 1).setBackground('#eef2f4');
+    gray(off + 9);
   }
-  if (kind === 'biz') { list(4, ['예', '아니오']); sh.getRange(1, 5, 1, 1).setBackground('#8a9ba5'); sh.getRange(2, 5, 500, 1).setBackground('#eef2f4'); }
-  if (kind === 'info') list(4, ['일반', '들여쓰기', '강조', '표머리', '표행']);
+  if (kind === 'biz') { list(4, ['예', '아니오']); gray(5); }
+  if (kind === 'info') list(4, ['글', '표']);
+  if (kind === 'notice') {
+    sh.getRange(2, 1, rows.length, 1).setFontWeight('bold');
+    sh.getRange(2, 3, rows.length, 1).setFontColor('#6b7c85');
+  }
   const notes = {
-    '안내문구': '왼쪽 항목 이름은 바꾸지 말고 오른쪽 내용만 고치세요. "소개 문단", "사업별 질문 시작 안내"는 행을 추가해 문단을 늘릴 수 있습니다. 칸 안에서 줄바꿈은 Alt+Enter(맥: Option+Enter)입니다.',
-    '공통질문': '한 줄이 한 문항입니다. 보기는 보기1, 보기2… 칸에 하나씩 적고, 쓰지 않는 칸은 비워 두세요. 유형과 필수는 목록에서 고릅니다. 새 문항은 마지막 줄 아래에 적으면 되고 ID는 자동으로 채워집니다. 번호 칸이 비어 있으면 앞 번호에 이어 자동 번호가 붙습니다.',
+    '안내문구': '항목 하나가 한 줄입니다. 왼쪽 항목 이름은 바꾸지 말고 가운데 "내용" 칸만 고치세요. 칸 안에서 줄을 바꾸려면 Alt+Enter(맥: Option+Enter)를 누릅니다. 오른쪽 "작성 안내"는 참고용입니다.',
+    '공통질문': '한 줄이 한 문항입니다. 보기는 "보기" 칸 하나에 한 줄에 하나씩 적습니다(줄바꿈은 Alt+Enter). 직접 입력창이 필요한 보기는 앞에 [직접입력] 을 붙이세요. 예: [직접입력] 기타(직접 입력). 유형과 필수는 목록에서 고릅니다. 새 문항은 마지막 줄 아래에 적으면 되고 ID는 자동으로 채워집니다. 번호 칸이 비어 있으면 앞 번호에 이어 자동 번호가 붙습니다.',
     '사업목록': '화면에 나오는 사업 목록입니다. 사용 칸을 "아니오"로 바꾸면 이 사업은 설문에서 빠집니다. 번호는 사업안내·사업별질문 탭과 연결됩니다. 새 사업은 마지막 줄 아래에 적으세요.',
-    '사업안내': '사업 선택 후 각 사업 화면 위쪽에 나오는 안내문입니다. 한 줄이 한 문장입니다. 같은 사업번호와 소제목이 이어지면 한 묶음으로 보입니다. 표시: 일반/들여쓰기/강조(빨간 글씨), 표는 표머리 줄 1개 + 표행 줄 여러 개로 적고 칸은 | 로 나눕니다. 표 칸 앞에 !를 붙이면 빨간 글씨입니다.',
+    '사업안내': '사업 선택 후 각 사업 화면 위쪽에 나오는 안내문입니다. 소제목 하나가 한 줄이고, 내용 칸에 그 소제목의 문장들을 줄바꿈(Alt+Enter)으로 나눠 적습니다. 줄 앞에 [강조] 를 붙이면 빨간 글씨, [들여쓰기] 를 붙이면 들여쓰기입니다. 표는 같은 소제목으로 줄을 하나 더 만들고 종류를 "표"로 한 뒤, 내용 첫 줄은 표 머리, 다음 줄부터는 표 행으로 쓰고 칸은 | 로 나눕니다. 표 칸 앞에 [강조] 를 붙이면 빨간 글씨입니다.',
     '사업별질문': '선택한 사업마다 나오는 질문입니다. 사업번호가 "전체"이면 모든 사업에 나오고, 3-1 또는 3-1,3-2 처럼 적으면 그 사업에만 나옵니다. 나머지 칸 규칙은 공통질문 탭과 같습니다.',
-    '마무리질문': '마지막에 나오는 공통문항입니다. 칸 규칙은 공통질문 탭과 같습니다. 보기1에 [사업목록]이라고 적으면 사업 이름이 보기로 자동 채워집니다.'
+    '마무리질문': '마지막에 나오는 공통문항입니다. 칸 규칙은 공통질문 탭과 같습니다. 보기에 [사업목록] 이라고 한 줄 적으면 사업 이름이 보기로 자동 채워집니다.'
   };
   sh.getRange(1, 1).setNote(notes[name] || '');
+  try { sh.autoResizeRows(1, all.length); } catch (e) { /* 행 높이는 자동으로 맞춰집니다 */ }
 }
