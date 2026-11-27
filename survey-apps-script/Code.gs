@@ -122,6 +122,7 @@ function onOpen() {
     .addItem('③ 변경 내용 바로 반영하기', 'applyChanges')
     .addItem('④ 설문 링크 보기', 'showLink')
     .addItem('⑤ 비어 있거나 깨진 탭만 샘플로 복구', 'repairSheets')
+    .addItem('⑥ 새 회차 시작 (매년 새로 응답 받기)', 'startNewRound')
     .addToUi();
 }
 
@@ -199,6 +200,64 @@ function setupSheets() {
   reportWrite_('샘플 문항을 불러왔습니다', writeTabs_(tabSpecs_()));
 }
 
+function responseCount_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(rawName_());
+  return sh ? Math.max(sh.getLastRow() - 1, 0) : 0;
+}
+
+/**
+ * 새 회차를 시작합니다. 문구·문항·사업 목록은 그대로 두고(필요하면 먼저 고치세요),
+ * 응답만 새 탭("응답_회차이름", 숨김 "원본_회차이름")에 0건부터 쌓습니다. 이전 회차 응답은 그대로 보관됩니다.
+ * 같은 설문 링크를 계속 쓰므로 다시 배포할 필요가 없습니다.
+ */
+function startNewRound() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ask = function (title, msg) {
+    const r = ui.prompt(title, msg, ui.ButtonSet.OK_CANCEL);
+    return r.getSelectedButton() === ui.Button.OK ? cleanRound_(r.getResponseText()) : null;
+  };
+  const cur = getRound_();
+  const next = ask('새 회차 시작', '새로 시작할 회차 이름을 입력하세요. 예: 2027\n\n이 이름으로 응답 탭이 새로 만들어지고 응답이 0건부터 다시 쌓입니다. 지금까지 받은 응답은 그대로 보관됩니다.\n문항·안내문을 고칠 것이 있으면 먼저 시트에서 고친 뒤 실행하세요.');
+  if (next === null) return;
+  if (!next) { ui.alert('이름이 비어 있습니다', '회차 이름을 입력해 주세요. (예: 2027)', ui.ButtonSet.OK); return; }
+  if (next === cur) { ui.alert('이미 진행 중인 회차입니다', '현재 회차 이름과 같습니다. 다른 이름을 입력해 주세요.', ui.ButtonSet.OK); return; }
+  if (ss.getSheetByName(RESULT_SHEET + '_' + next) || ss.getSheetByName(RAW_SHEET + '_' + next)) {
+    ui.alert('이미 있는 회차 이름입니다', '"' + next + '" 이름의 응답 탭이 이미 있습니다. 다른 이름을 입력해 주세요.', ui.ButtonSet.OK);
+    return;
+  }
+  // 이름 없이 쓰던 처음 응답은 이름을 붙여 보관합니다.
+  let oldName = null;
+  if (!cur && (ss.getSheetByName(RESULT_SHEET) || ss.getSheetByName(RAW_SHEET))) {
+    oldName = ask('지금까지 받은 응답의 이름', '지금까지 받은 응답을 보관할 이름을 입력하세요. 예: 2026\n(탭 이름이 "응답_2026"처럼 바뀝니다.)');
+    if (oldName === null) return;
+    if (!oldName || oldName === next || ss.getSheetByName(RESULT_SHEET + '_' + oldName) || ss.getSheetByName(RAW_SHEET + '_' + oldName)) {
+      ui.alert('보관 이름을 사용할 수 없습니다', '비어 있거나 새 회차 이름과 같거나 이미 있는 이름입니다. 처음부터 다시 실행해 주세요.', ui.ButtonSet.OK);
+      return;
+    }
+  }
+  const n = responseCount_();
+  const label = cur || oldName || '지금까지';
+  const ok = ui.alert('새 회차를 시작할까요?', '지금까지 받은 응답 ' + n + '건은 "' + label + '" 회차로 보관하고,\n"' + next + '" 회차를 새로 시작합니다. (응답 0건에서 시작, 같은 설문 링크를 계속 씁니다)', ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    if (oldName) {
+      const r = ss.getSheetByName(RESULT_SHEET); if (r) r.setName(RESULT_SHEET + '_' + oldName);
+      const w = ss.getSheetByName(RAW_SHEET); if (w) w.setName(RAW_SHEET + '_' + oldName);
+    }
+    PropertiesService.getScriptProperties().setProperty('ROUND', next);
+    CacheService.getScriptCache().remove('cfg');
+    rawSheet_();
+    rebuildResults_(getConfigFresh_());
+  } finally {
+    lock.releaseLock();
+  }
+  ui.alert('새 회차를 시작했습니다', '"' + next + '" 회차의 응답은 "' + RESULT_SHEET + '_' + next + '" 탭에 쌓입니다.\n이전 응답은 "' + RESULT_SHEET + '_' + label + '" 탭에 그대로 있습니다.\n설문 링크는 그대로이고 다시 배포할 필요가 없습니다.', ui.ButtonSet.OK);
+}
+
 /** 비어 있거나 이전 형식인 탭만 샘플로 복구합니다. 정상인 탭은 건드리지 않습니다. */
 function repairSheets() {
   const ui = SpreadsheetApp.getUi();
@@ -216,6 +275,7 @@ function repairSheets() {
 function checkConfig() {
   const ui = SpreadsheetApp.getUi();
   const lines = tabSpecs_().map(function (spec) { return spec.name + ': ' + tabStatus_(spec).text; });
+  lines.push('현재 회차: ' + (getRound_() || '(이름 없음)') + ' · 응답 ' + responseCount_() + '건 (' + resultName_() + ' 탭)');
   const bad = tabSpecs_().some(function (spec) { return tabStatus_(spec).code !== 'ok'; });
   if (bad) {
     ui.alert('탭 상태', lines.join('\n') + '\n\n비어 있거나 이전 형식인 탭이 있습니다. 메뉴 [⑤ 비어 있거나 깨진 탭만 샘플로 복구]를 실행하세요.', ui.ButtonSet.OK);
@@ -525,7 +585,8 @@ function hash_(email) {
     salt = Utilities.getUuid() + Utilities.getUuid();
     props.setProperty('SALT', salt);
   }
-  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + email, Utilities.Charset.UTF_8);
+  const round = getRound_();
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + (round ? round + '|' : '') + email, Utilities.Charset.UTF_8);
   return bytes.map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
 }
 
@@ -543,11 +604,19 @@ function findRow_(sheet, key) {
   return 0;
 }
 
+/* ---------- 회차 (매년 새로 응답 받기) ---------- */
+
+/** 현재 회차 이름. 비어 있으면 처음 만든 그대로의 '응답'/'원본' 탭을 씁니다. */
+function getRound_() { return PropertiesService.getScriptProperties().getProperty('ROUND') || ''; }
+function rawName_() { const r = getRound_(); return r ? RAW_SHEET + '_' + r : RAW_SHEET; }
+function resultName_() { const r = getRound_(); return r ? RESULT_SHEET + '_' + r : RESULT_SHEET; }
+function cleanRound_(text) { return String(text || '').replace(/[\[\]*?:\/\\]/g, '').trim().slice(0, 40); }
+
 function rawSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sh = ss.getSheetByName(RAW_SHEET);
+  let sh = ss.getSheetByName(rawName_());
   if (!sh) {
-    sh = ss.insertSheet(RAW_SHEET);
+    sh = ss.insertSheet(rawName_());
     sh.getRange(1, 1, 1, 5).setValues([['응답자 식별값(해시)', '수정일시', '제출 완료', '응답 원문(JSON)', '제출일시']]);
     sh.setFrozenRows(1);
     sh.hideSheet();
@@ -557,7 +626,7 @@ function rawSheet_() {
 
 function resultSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  return ss.getSheetByName(RESULT_SHEET) || ss.insertSheet(RESULT_SHEET);
+  return ss.getSheetByName(resultName_()) || ss.insertSheet(resultName_());
 }
 
 /** 새로 추가한 문항·사업 행에 ID가 비어 있으면 자동으로 채웁니다. (ID는 응답을 문항과 연결하는 값이라 고치지 마세요) */
