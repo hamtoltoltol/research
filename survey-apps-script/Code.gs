@@ -51,6 +51,9 @@ function boot() {
     return { state: { ok: false, setup: true, message: '설문을 준비하고 있습니다. 잠시 후 다시 열어 주세요.' }, webUrl: webUrl };
   }
   const config = getConfig_();
+  if (!config.businesses.length) {
+    return { state: { ok: false, setup: true, message: '설문을 준비하고 있습니다. 잠시 후 다시 열어 주세요.' }, webUrl: webUrl };
+  }
   const sheet = rawSheet_();
   const row = findRow_(sheet, who.key);
   let data = null;
@@ -114,48 +117,116 @@ function saveResponse(payload) {
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('설문 관리')
-    .addItem('① 샘플 문항 불러오기 (처음 한 번)', 'setupSheets')
-    .addItem('② 변경 내용 점검', 'checkConfig')
+    .addItem('① 샘플 문항 불러오기 (처음 한 번 · 전체 덮어쓰기)', 'setupSheets')
+    .addItem('② 변경 내용 점검 (탭별 상태 확인)', 'checkConfig')
     .addItem('③ 변경 내용 바로 반영하기', 'applyChanges')
     .addItem('④ 설문 링크 보기', 'showLink')
+    .addItem('⑤ 비어 있거나 깨진 탭만 샘플로 복구', 'repairSheets')
     .addToUi();
+}
+
+/** 탭 6개의 정의(제목 줄, 샘플 내용, 열 너비, 종류). */
+function tabSpecs_() {
+  return [
+    { name: TAB.notice, head: SEED.heads.notice, rows: SEED.notice, widths: [150, 640, 360], kind: 'notice' },
+    { name: TAB.common, head: SEED.heads.question, rows: SEED.common, widths: questionWidths_(), kind: 'question' },
+    { name: TAB.biz, head: SEED.heads.biz, rows: SEED.bizList, widths: [70, 320, 360, 70, 90], kind: 'biz' },
+    { name: TAB.info, head: SEED.heads.info, rows: SEED.info, widths: [80, 200, 640, 70], kind: 'info' },
+    { name: TAB.bizq, head: SEED.heads.bizq, rows: SEED.bizq, widths: [90].concat(questionWidths_()), kind: 'bizq' },
+    { name: TAB.closing, head: SEED.heads.question, rows: SEED.closing, widths: questionWidths_(), kind: 'question' }
+  ];
+}
+
+/** 탭 하나의 상태: 없음 / 이전 형식 / 비어 있음 / 정상 */
+function tabStatus_(spec) {
+  const sh = getSheet_(spec.name);
+  if (!sh) return { code: 'missing', text: '탭이 없습니다' };
+  const cur = sh.getRange(1, 1, 1, spec.head.length).getDisplayValues()[0];
+  for (let i = 0; i < spec.head.length; i++) {
+    if (String(cur[i]) !== String(spec.head[i])) return { code: 'old', text: '이전 형식이거나 제목 줄이 바뀌었습니다' };
+  }
+  const n = Math.max(sh.getLastRow() - 1, 0);
+  if (n === 0) return { code: 'empty', text: '내용이 비어 있습니다' };
+  return { code: 'ok', text: '정상 (' + n + '행)' };
+}
+
+function reorderTabs_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  [TAB.notice, TAB.common, TAB.biz, TAB.info, TAB.bizq, TAB.closing].forEach(function (n, i) {
+    const sh = ss.getSheetByName(n);
+    if (!sh) return;
+    try { ss.setActiveSheet(sh); ss.moveActiveSheet(i + 1); } catch (e) { /* 탭 순서는 필수가 아닙니다 */ }
+  });
+}
+
+/** 지정한 탭들을 샘플로 다시 씁니다. 탭마다 따로 처리해, 한 탭이 실패해도 나머지는 계속합니다. */
+function writeTabs_(specs) {
+  const done = [], errors = [], warnings = [];
+  specs.forEach(function (spec) {
+    try {
+      const w = writeTab_(spec.name, spec.head, spec.rows, spec.widths, spec.kind);
+      done.push(spec.name);
+      (w || []).forEach(function (x) { warnings.push(x); });
+    } catch (e) {
+      errors.push(spec.name + ': ' + (e && e.message ? e.message : e));
+    }
+  });
+  reorderTabs_();
+  try { getConfigFresh_(); } catch (e) { errors.push('설정 읽기: ' + (e && e.message ? e.message : e)); }
+  return { done: done, errors: errors, warnings: warnings };
+}
+
+function reportWrite_(title, r) {
+  const ui = SpreadsheetApp.getUi();
+  let msg = '';
+  if (r.done.length) msg += '채운 탭: ' + r.done.join(', ') + '\n';
+  if (r.errors.length) msg += '\n오류가 난 탭 (이 내용을 담당자에게 알려 주세요):\n' + r.errors.join('\n') + '\n';
+  if (r.warnings.length) msg += '\n서식 일부를 적용하지 못했습니다 (문항 내용에는 영향 없음): ' + r.warnings.length + '건\n';
+  if (!r.errors.length) msg += '\n각 탭 맨 위 칸(A1)의 메모를 읽고 문구를 수정하세요. 수정 후 5분 안에 설문에 반영되고, 바로 반영하려면 메뉴 ③을 누르세요.';
+  ui.alert(r.errors.length ? title + ' (일부 실패)' : title, msg, ui.ButtonSet.OK);
 }
 
 function setupSheets() {
   const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
   const exists = Object.keys(TAB).some(function (k) {
-    const sh = ss.getSheetByName(TAB[k]);
+    const sh = getSheet_(TAB[k]);
     return sh && sh.getLastRow() > 1;
   });
   if (exists) {
-    const r = ui.alert('이미 문항이 있습니다', '샘플 문항으로 다시 채우면 지금 적혀 있는 문항과 안내문이 모두 지워집니다. 계속할까요?', ui.ButtonSet.YES_NO);
+    const r = ui.alert('이미 문항이 있습니다', '샘플 문항으로 다시 채우면 지금 적혀 있는 문항과 안내문이 모두 지워집니다. 계속할까요?\n(일부 탭만 깨졌다면 메뉴 ⑤가 더 안전합니다.)', ui.ButtonSet.YES_NO);
     if (r !== ui.Button.YES) return;
   }
-  writeTab_(TAB.notice, SEED.heads.notice, SEED.notice, [150, 640, 360], 'notice');
-  writeTab_(TAB.common, SEED.heads.question, SEED.common, questionWidths_(), 'question');
-  writeTab_(TAB.biz, SEED.heads.biz, SEED.bizList, [70, 320, 360, 70, 90], 'biz');
-  writeTab_(TAB.info, SEED.heads.info, SEED.info, [80, 200, 640, 70], 'info');
-  writeTab_(TAB.bizq, SEED.heads.bizq, SEED.bizq, [90].concat(questionWidths_()), 'bizq');
-  writeTab_(TAB.closing, SEED.heads.question, SEED.closing, questionWidths_(), 'question');
-  const order = [TAB.notice, TAB.common, TAB.biz, TAB.info, TAB.bizq, TAB.closing];
-  order.forEach(function (n, i) { ss.setActiveSheet(ss.getSheetByName(n)); ss.moveActiveSheet(i + 1); });
-  getConfigFresh_();
-  ui.alert('샘플 문항을 불러왔습니다', '각 탭의 안내 행(맨 위 메모)을 읽고 문구를 수정하세요. 수정 후에는 5분 안에 설문에 반영되고, 바로 반영하려면 메뉴 ③을 누르세요.', ui.ButtonSet.OK);
+  reportWrite_('샘플 문항을 불러왔습니다', writeTabs_(tabSpecs_()));
+}
+
+/** 비어 있거나 이전 형식인 탭만 샘플로 복구합니다. 정상인 탭은 건드리지 않습니다. */
+function repairSheets() {
+  const ui = SpreadsheetApp.getUi();
+  const broken = tabSpecs_().filter(function (spec) { return tabStatus_(spec).code !== 'ok'; });
+  if (!broken.length) {
+    ui.alert('복구할 탭이 없습니다', '6개 탭이 모두 정상입니다. 설문에 문제가 있다면 메뉴 ②로 점검해 주세요.', ui.ButtonSet.OK);
+    return;
+  }
+  const names = broken.map(function (b) { return b.name; }).join(', ');
+  const r = ui.alert('다음 탭을 샘플로 복구합니다', names + '\n\n이 탭들의 내용은 샘플 문항으로 다시 채워집니다. 나머지 탭은 그대로 둡니다. 계속할까요?', ui.ButtonSet.YES_NO);
+  if (r !== ui.Button.YES) return;
+  reportWrite_('복구했습니다', writeTabs_(broken));
 }
 
 function checkConfig() {
-  if (!layoutOk_()) {
-    SpreadsheetApp.getUi().alert('시트 형식이 이전 버전입니다', '메뉴 [설문 관리 > ① 샘플 문항 불러오기]를 다시 실행해 새 형식으로 바꿔 주세요. (지금 시트에 적힌 문항은 샘플로 덮어쓰이니, 고친 내용이 있으면 먼저 복사해 두세요.)', SpreadsheetApp.getUi().ButtonSet.OK);
+  const ui = SpreadsheetApp.getUi();
+  const lines = tabSpecs_().map(function (spec) { return spec.name + ': ' + tabStatus_(spec).text; });
+  const bad = tabSpecs_().some(function (spec) { return tabStatus_(spec).code !== 'ok'; });
+  if (bad) {
+    ui.alert('탭 상태', lines.join('\n') + '\n\n비어 있거나 이전 형식인 탭이 있습니다. 메뉴 [⑤ 비어 있거나 깨진 탭만 샘플로 복구]를 실행하세요.', ui.ButtonSet.OK);
     return;
   }
   const problems = [];
   const cfg = buildConfig_(problems);
-  const ui = SpreadsheetApp.getUi();
   if (problems.length) {
     ui.alert('확인이 필요한 부분 ' + problems.length + '개', problems.slice(0, 25).join('\n') + (problems.length > 25 ? '\n… 외 ' + (problems.length - 25) + '개' : ''), ui.ButtonSet.OK);
   } else {
-    ui.alert('문제 없음', '공통질문 ' + cfg.common.length + '개, 사업 ' + cfg.businesses.length + '개, 마무리 질문 ' + cfg.closing.length + '개를 정상적으로 읽었습니다.', ui.ButtonSet.OK);
+    ui.alert('문제 없음', lines.join('\n') + '\n\n공통질문 ' + cfg.common.length + '개, 사업 ' + cfg.businesses.length + '개, 사업별 질문 ' + (cfg.businesses[0] ? cfg.businesses[0].questions.length : 0) + '개(사업당), 마무리 질문 ' + cfg.closing.length + '개를 정상적으로 읽었습니다.', ui.ButtonSet.OK);
   }
 }
 
@@ -526,11 +597,16 @@ function ensureIds_() {
 
 /* ---------- 시트 서식 ---------- */
 
-/** 시트가 현재 형식(안내문구 탭 C1 = '작성 안내')인지 확인합니다. 이전 버전 형식이면 false. */
+/** 6개 탭이 모두 현재 형식(제목 줄이 일치)인지 확인합니다. 하나라도 이전 형식·없음이면 false. */
 function layoutOk_() {
-  const sh = getSheet_(TAB.notice);
-  if (!sh) return false;
-  return String(sh.getRange(1, 3).getDisplayValue()) === '작성 안내';
+  try {
+    return tabSpecs_().every(function (spec) {
+      const c = tabStatus_(spec).code;
+      return c === 'ok' || c === 'empty';
+    });
+  } catch (e) {
+    return false;
+  }
 }
 
 function questionWidths_() {
@@ -540,32 +616,37 @@ function questionWidths_() {
 function writeTab_(name, head, rows, widths, kind) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(name) || ss.insertSheet(name);
-  sh.clear();
   const cols = head.length;
   const all = [head].concat(rows);
+  // 1) 내용부터 씁니다. 여기서 실패하면 이 탭은 실패로 보고합니다.
+  sh.clear();
   sh.getRange(1, 1, all.length, cols).setNumberFormat('@').setValues(all);
-  sh.getRange(1, 1, 1, cols).setFontWeight('bold').setBackground('#0b6b8a').setFontColor('#ffffff');
-  sh.setFrozenRows(1);
-  sh.getRange(2, 1, Math.max(rows.length, 1), cols).setWrap(true).setVerticalAlignment('top');
-  widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
+  // 2) 서식은 하나씩 시도하고, 실패해도 내용에는 영향이 없도록 합니다.
+  const warnings = [];
+  const soft = function (label, fn) {
+    try { fn(); } catch (e) { warnings.push(name + ' ' + label + ': ' + (e && e.message ? e.message : e)); }
+  };
+  soft('제목 줄 서식', function () { sh.getRange(1, 1, 1, cols).setFontWeight('bold').setBackground('#0b6b8a').setFontColor('#ffffff'); sh.setFrozenRows(1); });
+  soft('줄바꿈 서식', function () { sh.getRange(2, 1, Math.max(rows.length, 1), cols).setWrap(true).setVerticalAlignment('top'); });
+  soft('열 너비', function () { widths.forEach(function (w, i) { sh.setColumnWidth(i + 1, w); }); });
   const list = function (col, values) {
-    sh.getRange(2, col, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(false).build());
+    const n = Math.min(500, Math.max(sh.getMaxRows() - 1, 1));
+    sh.getRange(2, col, n, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(false).build());
   };
   const gray = function (col) {
+    const n = Math.min(500, Math.max(sh.getMaxRows() - 1, 1));
     sh.getRange(1, col, 1, 1).setBackground('#8a9ba5');
-    sh.getRange(2, col, 500, 1).setBackground('#eef2f4');
+    sh.getRange(2, col, n, 1).setBackground('#eef2f4');
   };
   const off = kind === 'bizq' ? 1 : 0;
   if (kind === 'question' || kind === 'bizq') {
-    list(off + 3, ['단일선택', '복수선택', '서술형']);
-    list(off + 4, ['예', '아니오']);
-    gray(off + 9);
+    soft('목록 상자', function () { list(off + 3, ['단일선택', '복수선택', '서술형']); list(off + 4, ['예', '아니오']); });
+    soft('ID 칸 색', function () { gray(off + 9); });
   }
-  if (kind === 'biz') { list(4, ['예', '아니오']); gray(5); }
-  if (kind === 'info') list(4, ['글', '표']);
+  if (kind === 'biz') { soft('목록 상자', function () { list(4, ['예', '아니오']); }); soft('ID 칸 색', function () { gray(5); }); }
+  if (kind === 'info') soft('목록 상자', function () { list(4, ['글', '표']); });
   if (kind === 'notice') {
-    sh.getRange(2, 1, rows.length, 1).setFontWeight('bold');
-    sh.getRange(2, 3, rows.length, 1).setFontColor('#6b7c85');
+    soft('항목 서식', function () { sh.getRange(2, 1, rows.length, 1).setFontWeight('bold'); sh.getRange(2, 3, rows.length, 1).setFontColor('#6b7c85'); });
   }
   const notes = {
     '안내문구': '항목 하나가 한 줄입니다. 왼쪽 항목 이름은 바꾸지 말고 가운데 "내용" 칸만 고치세요. 칸 안에서 줄을 바꾸려면 Alt+Enter(맥: Option+Enter)를 누릅니다. 오른쪽 "작성 안내"는 참고용입니다.',
@@ -575,6 +656,7 @@ function writeTab_(name, head, rows, widths, kind) {
     '사업별질문': '선택한 사업마다 나오는 질문입니다. 사업번호가 "전체"이면 모든 사업에 나오고, 3-1 또는 3-1,3-2 처럼 적으면 그 사업에만 나옵니다. 나머지 칸 규칙은 공통질문 탭과 같습니다.',
     '마무리질문': '마지막에 나오는 공통문항입니다. 칸 규칙은 공통질문 탭과 같습니다. 보기에 [사업목록] 이라고 한 줄 적으면 사업 이름이 보기로 자동 채워집니다.'
   };
-  sh.getRange(1, 1).setNote(notes[name] || '');
-  try { sh.autoResizeRows(1, all.length); } catch (e) { /* 행 높이는 자동으로 맞춰집니다 */ }
+  soft('메모', function () { sh.getRange(1, 1).setNote(notes[name] || ''); });
+  soft('행 높이', function () { sh.autoResizeRows(1, all.length); });
+  return warnings;
 }
