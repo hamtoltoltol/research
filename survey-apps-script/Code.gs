@@ -597,13 +597,10 @@ function ensureIds_() {
 
 /* ---------- 시트 서식 ---------- */
 
-/** 6개 탭이 모두 현재 형식(제목 줄이 일치)인지 확인합니다. 하나라도 이전 형식·없음이면 false. */
+/** 6개 탭이 모두 현재 형식이고 내용이 있는지 확인합니다. 하나라도 이전 형식·없음·비어 있으면 false (응답자에게는 "준비 중"이 보입니다). */
 function layoutOk_() {
   try {
-    return tabSpecs_().every(function (spec) {
-      const c = tabStatus_(spec).code;
-      return c === 'ok' || c === 'empty';
-    });
+    return tabSpecs_().every(function (spec) { return tabStatus_(spec).code === 'ok'; });
   } catch (e) {
     return false;
   }
@@ -620,6 +617,9 @@ function writeTab_(name, head, rows, widths, kind) {
   const all = [head].concat(rows);
   // 1) 내용부터 씁니다. 여기서 실패하면 이 탭은 실패로 보고합니다.
   sh.clear();
+  // clear()는 이전 버전이 남긴 목록 상자(데이터 확인 규칙)를 지우지 못합니다. 남아 있으면 새 값을 쓸 때
+  // "입력하신 데이터는 데이터 확인 규칙을 위반합니다" 오류가 나므로, 쓰기 전에 규칙을 모두 지웁니다.
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations();
   sh.getRange(1, 1, all.length, cols).setNumberFormat('@').setValues(all);
   // 2) 서식은 하나씩 시도하고, 실패해도 내용에는 영향이 없도록 합니다.
   const warnings = [];
